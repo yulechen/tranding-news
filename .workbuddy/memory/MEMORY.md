@@ -65,9 +65,12 @@
   `includes` 而不是 `===`，否则错误翻译整块失效
 
 ## 前端顶栏（2026-09-19 起）
-- 只有三个按钮：**接口**（`#btn-api` → 开放接口说明弹窗）、
+- 从左到右：品牌（logo + 「云端信息库」+ `公开可看` 徽章）→ **`.topbar-status`：
+  收藏开关 `#btn-fav`（只有图标）+ 统计 `#stat-text`** → 右侧三个按钮
+- 三个按钮：**接口**（`#btn-api` → 开放接口说明弹窗）、
   **留言**（`#btn-msg`，带条数角标 `#msg-badge` → 留言板弹窗）、**刷新**
-- 窄屏（≤680px）下按钮文字隐藏只留图标；角标保留，否则认不出哪个是留言
+- 窄屏（≤680px）下按钮文字隐藏只留图标；角标保留，否则认不出哪个是留言。
+  ≤900px 隐藏 `brand-name`；≤680px 统计降到 `--fs-2xs`、收藏按钮 28px —— 360px 视口实测不溢出
 - 留言弹窗 `#msg-modal`：上半输入区（署名存 localStorage `iv_msg_author`、
   Ctrl/⌘+Enter 发送），下半倒序列表（`#msg-list`，可删）；删除前 confirm
 - 🚫 留言板的**遮罩点击刻意不关闭**（打字时误触太烦），只认关闭按钮与 Esc
@@ -120,7 +123,7 @@
   查找全靠标签，排序固定「最新优先」（不再有下拉）。自检里「页面不含上传入口与搜索」与
   「固定最新优先，无排序控件」两条守着，别再手痒加回去。
 - 本机 bash 没有 coreutils，脚本一律用 node 写，不要用 ls/dirname/cat
-- 每次改完代码跑 `node tools/selfcheck.mjs [--base <url>]`，**本地 27 项 / 线上 29 项**要全绿
+- 每次改完代码跑 `node tools/selfcheck.mjs [--base <url>]`，**本地 29 项 / 线上 31 项**要全绿
   （「开放接口」那组只在非 localhost 地址上执行，本地会打印跳过原因）
 - **UI 改动必须实际截图看过再交付**：`node tools/shot.mjs --out x.png --script "<JS>"`，
   用本机 Chrome 的 CDP 无头模式，能执行一段 JS 后再截图（拍交互后的状态），零安装零依赖。
@@ -150,8 +153,15 @@
   实现要点：`openInNewWindow` 里 **`window.open` 必须同步发** —— 先开空白占位窗 + 写入载入页，
   正文拿到后再 `win.location.replace(blobUrl)`；先 `await` 再 `open` 会被弹窗拦截器拦掉。
   自检里「打开方式：卡片默认新窗口」一组守着这条，含「必须同步开窗」的断言。
-- 收藏：工具条首个 chip（`data-fav`）切换只看收藏；状态存 DB `documents.starred`；
-  深链 `#fav`；预览页顶栏也有收藏按钮；卡片 `is-starred` 有琥珀色顶条
+- 收藏：**开关在顶栏**（`#btn-fav`，只有一个星标图标，点亮＝只看收藏），状态存 DB
+  `documents.starred`；深链 `#fav`；预览页顶栏也有收藏按钮；卡片 `is-starred` 是暖色描边
+- 🚫 **收藏不参与排序**（用户 2026-09-19 要求「点击收藏后不影响卡片排序，还是按时间顺序」）：
+  `visibleDocs()` 里只留 `byDate(b) - byDate(a)`，**不要**再加 `Number(!!b.starred) - Number(!!a.starred)`
+  那种置顶排序；自检「固定最新优先」一组有两条断言挡着
+- **卡片顶部固定四个图标**（`renderDocs` 里 `.card-actions`，顺序别乱）：
+  `[data-preview]` 页内预览 · `[data-star]` 收藏 · `[data-tagedit]` 标签 · `[data-del]` 删除。
+  删除和预览页顶栏的删除**共用 `deleteDoc(doc)`**（内含二次确认 + 焦点还原到原位置那张卡）。
+  自检「卡片操作收在卡片顶部」守着这四个 data 属性与 `.del-btn`
 - 筛选都是前端本地过滤（一次拉最多 500 条列表，不带 `content`）
 - 顶栏另有：接口说明弹窗（`#api-modal` / `renderApiDoc`）、留言板（`#msg-modal` / `openMsgBoard`）
 - 留言不参与标签与筛选体系，是独立的一张表、独立的一个弹窗

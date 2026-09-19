@@ -37,6 +37,14 @@
       <span class="pub-badge">公开可看</span>
     </div>
 
+    <!-- 收藏视角开关 + 内容统计：只留一个图标和一行数字，都在顶栏 -->
+    <div class="topbar-status">
+      <button type="button" class="fav-btn" id="btn-fav" title="只看收藏" aria-label="只看收藏" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.85z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="stat" id="stat-text" role="status" aria-live="polite"></span>
+    </div>
+
     <div class="topbar-actions">
       <button type="button" class="btn btn-ghost" id="btn-api" title="推送数据开放接口" aria-label="推送数据开放接口说明">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8.5L5 12l4 3.5M15 8.5L19 12l-4 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -71,10 +79,7 @@
     </section>
 
     <section class="toolbar" aria-label="内容筛选">
-      <div class="chips" id="type-chips" role="group" aria-label="按类型或收藏筛选"></div>
-      <div class="toolbar-right">
-        <span class="stat" id="stat-text" role="status" aria-live="polite"></span>
-      </div>
+      <div class="chips" id="type-chips"></div>
     </section>
 
     <section class="tag-row is-hidden" id="tag-row" aria-label="按标签筛选"></section>

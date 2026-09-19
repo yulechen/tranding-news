@@ -46,6 +46,10 @@
   const eyeSvg =
     `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.7 12S6.3 6.3 12 6.3 21.3 12 21.3 12 17.7 17.7 12 17.7 2.7 12 2.7 12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`
 
+  // 卡片上的「删除」入口（真正删之前一定会走站内二次确认）
+  const delSvg =
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 7h14.8M9.6 7V5.5c0-.83.67-1.5 1.5-1.5h1.8c.83 0 1.5.67 1.5 1.5V7M6.6 7l.85 11.1c.07.9.82 1.6 1.72 1.6h5.66c.9 0 1.65-.7 1.72-1.6L17.4 7M10.4 10.9v5.2M13.6 10.9v5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+
   const $ = (sel) => document.querySelector(sel)
 
   const el = {
@@ -56,6 +60,7 @@
     btnApi: $('#btn-api'),
     btnMsg: $('#btn-msg'),
     msgBadge: $('#msg-badge'),
+    btnFav: $('#btn-fav'),
 
     inboxBar: $('#inbox-bar'),
     inboxCount: $('#inbox-count'),
@@ -418,12 +423,10 @@
     if (view.tag) list = list.filter((d) => Array.isArray(d.tags) && d.tags.includes(view.tag))
     if (view.starred) list = list.filter((d) => !!d.starred)
 
-    // 固定排序：最新优先（不再提供排序切换）
+    // 固定排序：只按时间倒序（最新优先）。
+    // 收藏与否、是否在收藏视角里，都不参与排序 —— 点收藏不会让卡片跳位。
     const byDate = (d) => new Date(d.created_at).getTime() || 0
     list.sort((a, b) => byDate(b) - byDate(a))
-
-    // 星标置顶
-    list.sort((a, b) => Number(!!b.starred) - Number(!!a.starred))
     return list
   }
 
@@ -447,10 +450,8 @@
       counts[k] = afterTag.filter((d) => (d.doc_type || 'other') === k).length
     })
 
-    const starChip =
-      `<button type="button" class="chip chip-star${view.starred ? ' is-active' : ''}" data-fav="1" title="只看收藏" aria-pressed="${view.starred}">` +
-      starSvg(view.starred) +
-      `<span>收藏</span><span class="chip-n">${starredN}</span></button>`
+    // 收藏视角的开关已经搬到顶栏（只留一个图标），这里只同步它的状态
+    syncFavBtn(starredN)
 
     // 类型筛选收进一个分段控件：比一排散落的胶囊安静，选中态也更明确
     const segs = TYPES.map((t) => {
@@ -459,8 +460,7 @@
       return `<button type="button" class="seg${view.type === t.key ? ' is-active' : ''}" data-type="${t.key}" aria-pressed="${view.type === t.key}">${t.label}<span class="seg-n">${n}</span></button>`
     }).join('')
 
-    el.typeChips.innerHTML =
-      starChip + `<div class="segmented" role="group" aria-label="按内容类型筛选">${segs}</div>`
+    el.typeChips.innerHTML = `<div class="segmented" role="group" aria-label="按内容类型筛选">${segs}</div>`
 
     const tags = tagCounts(afterType).slice(0, 24)
     // 选中的标签即使被类型筛成 0 条也要留着，否则用户看不到自己正卡在哪个筛选上
@@ -483,6 +483,17 @@
     }
   }
 
+  /** 同步顶栏收藏开关的状态：只有一个图标，开没开全靠颜色和填充表达 */
+  function syncFavBtn(starredN) {
+    if (!el.btnFav) return
+    const on = view.starred
+    el.btnFav.classList.toggle('is-active', on)
+    el.btnFav.setAttribute('aria-pressed', on ? 'true' : 'false')
+    const hint = starredN ? `共 ${starredN} 条收藏` : '还没有收藏'
+    el.btnFav.title = on ? `${hint} · 点击看全部` : `只看收藏（${hint}）`
+    el.btnFav.setAttribute('aria-label', on ? '正在只看收藏，点击看全部内容' : '只看收藏')
+  }
+
   function renderDocs(error) {
     const list = visibleDocs()
     el.statText.textContent = docs.length ? `共 ${list.length} / ${docs.length} 个内容` : ''
@@ -500,7 +511,7 @@
         el.emptyTitle.textContent = filtering ? '收藏里没有匹配的内容' : '收藏夹是空的'
         el.emptyDesc.textContent = filtering
           ? '换个标签，或点「全部」看看全部收藏。'
-          : '点卡片右上角的星标，或打开内容后点「收藏」，收藏的东西会集中到这里，随时能快速翻出来。'
+          : '点卡片右上角的星标就能收藏；收藏的内容会集中到这里，随时能翻出来。'
         return
       }
       el.emptyTitle.textContent = filtering ? '没有匹配的内容' : '还是空的'
@@ -527,14 +538,17 @@
         <div class="card-top">
           <span class="type-badge" data-type="${type}">${TYPE_LABEL[type]}</span>
           <div class="card-actions">
-            <button type="button" class="pv-btn" data-preview="${d.id}" title="页内预览" aria-label="页内预览《${title}》">
+            <button type="button" class="pv-btn" data-preview="${d.id}" title="在这个页面里预览" aria-label="页内预览《${title}》">
               ${eyeSvg}
+            </button>
+            <button type="button" class="star-btn${d.starred ? ' is-on' : ''}" data-star="${d.id}" title="${d.starred ? '取消收藏' : '收藏'}" aria-label="${d.starred ? '取消收藏' : '收藏'}《${title}》" aria-pressed="${d.starred ? 'true' : 'false'}">
+              ${starSvg(!!d.starred)}
             </button>
             <button type="button" class="tag-btn${hasTags ? ' is-on' : ''}" data-tagedit="${d.id}" title="${hasTags ? '编辑标签' : '添加标签'}" aria-label="${hasTags ? '编辑' : '添加'}《${title}》的标签" aria-pressed="${hasTags ? 'true' : 'false'}">
               ${tagSvg}
             </button>
-            <button type="button" class="star-btn${d.starred ? ' is-on' : ''}" data-star="${d.id}" title="${d.starred ? '取消收藏' : '收藏'}" aria-label="${d.starred ? '取消收藏' : '收藏'}《${title}》" aria-pressed="${d.starred ? 'true' : 'false'}">
-              ${starSvg(!!d.starred)}
+            <button type="button" class="del-btn" data-del="${d.id}" title="删除" aria-label="删除《${title}》">
+              ${delSvg}
             </button>
           </div>
         </div>
@@ -721,27 +735,43 @@
     }
 
     if (act === 'delete') {
-      const ok = await confirmAction({
-        title: '删除内容',
-        text: `删除《${doc.title || '未命名'}》？\n\n删除后无法恢复。`,
-        okText: '删除',
-        tone: 'danger'
-      })
-      if (!ok) return
-      try {
-        const del = await cloud.database.from('documents').delete().eq('id', doc.id).select('id')
-        if (del.error) throw del.error
-        if (!Array.isArray(del.data) || del.data.length === 0) {
-          throw new Error('没有删掉，可能已经不存在了')
-        }
-        docs = docs.filter((d) => d.id !== doc.id)
-        closePreview()
-        renderFilters()
-        renderDocs()
-        toast('已删除', 'ok')
-      } catch (err) {
-        toast(friendly(err), 'err')
+      await deleteDoc(doc)
+    }
+  }
+
+  /** 删除一条内容：预览页顶栏和卡片上的删除按钮，走的是同一条路 */
+  async function deleteDoc(doc) {
+    if (!doc) return
+    const ok = await confirmAction({
+      title: '删除内容',
+      text: `删除《${doc.title || '未命名'}》？\n\n删除后无法恢复。`,
+      okText: '删除',
+      tone: 'danger'
+    })
+    if (!ok) return
+
+    // 从卡片上删的时候，焦点会跟着按钮一起消失 —— 记下它是第几张，渲染完还回去
+    const fromGrid = !!document.activeElement?.closest?.('.card')
+    const index = visibleDocs().findIndex((d) => String(d.id) === String(doc.id))
+
+    try {
+      const del = await cloud.database.from('documents').delete().eq('id', doc.id).select('id')
+      if (del.error) throw del.error
+      if (!Array.isArray(del.data) || del.data.length === 0) {
+        throw new Error('没有删掉，可能已经不存在了')
       }
+      docs = docs.filter((d) => d.id !== doc.id)
+      if (current && String(current.id) === String(doc.id)) closePreview()
+      renderFilters()
+      renderDocs()
+      toast('已删除', 'ok')
+      if (fromGrid) {
+        const links = el.grid.querySelectorAll('.card-link')
+        const target = links[Math.min(index, links.length - 1)] || $('#main-content')
+        if (target) target.focus()
+      }
+    } catch (err) {
+      toast(friendly(err), 'err')
     }
   }
 
@@ -1294,16 +1324,17 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
       if (btn) deleteMessage(btn.dataset.msgdel)
     })
 
+    // 收藏视角的开关在顶栏（只有一个图标）。切换时清掉标签，
+    // 否则选中的标签会被筛掉，用户看不到自己卡在哪。
+    if (el.btnFav) el.btnFav.addEventListener('click', () => {
+      view.starred = !view.starred
+      view.tag = ''
+      writeHash()
+      renderFilters()
+      renderDocs()
+    })
+
     el.typeChips.addEventListener('click', (e) => {
-      const fav = e.target.closest('[data-fav]')
-      if (fav) {
-        view.starred = !view.starred
-        view.tag = ''                       // 切换收藏视角时清掉标签，避免选中的标签被筛掉后消失
-        writeHash()
-        renderFilters()
-        renderDocs()
-        return
-      }
       const btn = e.target.closest('[data-type]')
       if (!btn) return
       view.type = btn.dataset.type
@@ -1338,6 +1369,13 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
       if (star) {
         e.stopPropagation()
         toggleStar(star.dataset.star)
+        return
+      }
+      const del = e.target.closest('[data-del]')
+      if (del) {
+        e.stopPropagation()
+        const doc = docs.find((d) => String(d.id) === del.dataset.del)
+        if (doc) deleteDoc(doc)
         return
       }
       // 卡片正文是铺满整卡的链接：键盘能 Tab 到、回车能开。

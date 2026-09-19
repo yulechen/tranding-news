@@ -385,6 +385,36 @@ button { cursor: pointer; }
   position: relative;
 }
 
+/* 顶栏中段：收藏视角开关（只有图标）+ 内容统计 */
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.fav-btn {
+  position: relative;
+  width: 30px; height: 30px;
+  flex: none;
+  display: grid; place-items: center;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--r-sm);
+  color: var(--ink-4);
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
+              border-color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+}
+/* 视觉 30px，热区撑到 44px */
+.fav-btn::after { content: ""; position: absolute; inset: -7px; }
+.fav-btn svg { width: 17px; height: 17px; }
+.fav-btn:hover { background: var(--star-soft); color: var(--star); transform: scale(1.06); }
+.fav-btn.is-active {
+  color: var(--star-ink);
+  background: var(--star-soft);
+  border-color: var(--star-line);
+}
+.fav-btn.is-active svg path { fill: currentColor; }
+
 .content {
   max-width: var(--content-max);
   margin: 0 auto;
@@ -431,40 +461,6 @@ button { cursor: pointer; }
 
 .chips { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
 
-/* 收藏：独立于内容类型，琥珀色 */
-.chip {
-  height: 34px;
-  padding: 0 var(--sp-3);
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  font-size: var(--fs-sm);
-  font-weight: 550;
-  color: var(--ink-2);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
-              color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
-}
-.chip:hover { border-color: var(--border-strong); background: var(--surface-2); color: var(--ink); }
-.chip .chip-n {
-  font-size: var(--fs-xs);
-  color: var(--ink-4);
-  font-variant-numeric: tabular-nums;
-}
-
-.chip-star svg { width: 14px; height: 14px; flex: none; color: var(--star); }
-.chip-star.is-active {
-  background: var(--star-soft);
-  border-color: var(--star-line);
-  color: var(--star-ink);
-  box-shadow: none;
-}
-.chip-star.is-active svg { color: var(--star-ink); }
-.chip-star.is-active svg path { fill: currentColor; }
-.chip-star.is-active .chip-n { color: var(--star-ink); }
-
 /* 内容类型：分段控件（一个轨道里切，比散落的胶囊更清爽） */
 .segmented {
   display: inline-flex;
@@ -506,14 +502,13 @@ button { cursor: pointer; }
 }
 .seg.is-active .seg-n { color: var(--accent); }
 
-.toolbar-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  flex: none;
+/* 顶栏里的内容统计：紧跟在「公开可看」和收藏开关后面 */
+.stat {
+  font-size: var(--fs-sm);
+  color: var(--ink-4);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.stat { font-size: var(--fs-sm); color: var(--ink-4); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* ── 标签行 ─────────────────────────────────────────────── */
 .tag-row {
@@ -629,13 +624,13 @@ button { cursor: pointer; }
 
 .card-top { display: flex; align-items: center; gap: var(--sp-2); }
 
-/* 右上角两个快捷操作：打标签、收藏
+/* 卡片顶部一排操作：预览 / 收藏 / 标签 / 删除
    z-index 要压过卡片那条铺满整卡的链接，否则点不到 */
 .card-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   position: relative;
   z-index: 2;
 }
@@ -651,23 +646,25 @@ button { cursor: pointer; }
   letter-spacing: .05em;
 }
 
-/* 两个图标按钮：视觉 27px，热区撑到 44px（触屏再单独加大） */
-.star-btn, .tag-btn, .pv-btn {
+/* 视觉 28px，热区靠 ::after 撑到 44px 高（触屏再单独加大）。
+   平时就带颜色、不靠 hover 才出现 —— 否则用户根本不知道卡片上能点 */
+.star-btn, .tag-btn, .pv-btn, .del-btn {
   position: relative;
-  width: 27px; height: 27px;
+  width: 28px; height: 28px;
   display: grid; place-items: center;
   border: none; background: transparent;
   border-radius: var(--r-sm);
-  color: #c2c8d4;
+  color: var(--ink-4);
   transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
               transform var(--dur-1) var(--ease);
 }
-.star-btn::after, .tag-btn::after, .pv-btn::after {
+/* 44 × 36 的热区，跟 8px 间距正好首尾相接、互不重叠 */
+.star-btn::after, .tag-btn::after, .pv-btn::after, .del-btn::after {
   content: "";
   position: absolute;
   inset: -8px -4px;
 }
-.star-btn svg, .tag-btn svg, .pv-btn svg { width: 16px; height: 16px; }
+.star-btn svg, .tag-btn svg, .pv-btn svg, .del-btn svg { width: 17px; height: 17px; }
 
 .star-btn:hover { background: var(--star-soft); color: var(--star); transform: scale(1.08); }
 .star-btn.is-on { color: var(--star); }
@@ -678,6 +675,9 @@ button { cursor: pointer; }
 
 /* 页内预览：中性灰 hover，不跟强调色抢戏（默认打开方式是点卡片 → 新窗口） */
 .pv-btn:hover { background: var(--surface-3); color: var(--ink); transform: scale(1.08); }
+
+/* 删除：平时跟大家一样安静，只有 hover 时才泛红 */
+.del-btn:hover { background: var(--danger-soft); color: var(--danger); transform: scale(1.08); }
 
 /* ── 预览页的收藏按钮 ── */
 .btn-star svg { width: 15px; height: 15px; color: var(--star); }
@@ -1215,9 +1215,13 @@ button { cursor: pointer; }
 
   .content { padding: var(--sp-4) var(--sp-3) calc(72px + env(safe-area-inset-bottom, 0px)); }
 
-  /* 类型分段控件横滑，收藏入口始终留在最左不被压缩 */
-  .toolbar { flex-wrap: wrap; gap: 10px; }
-  .toolbar-right { margin-left: 0; width: 100%; justify-content: flex-end; }
+  /* 顶栏更挤：收藏开关和统计都收一档，别把右边的按钮挤掉 */
+  .topbar-status { gap: 4px; }
+  .stat { font-size: var(--fs-2xs); }
+  .fav-btn { width: 28px; height: 28px; }
+
+  /* 类型分段控件横滑，不换行、不被压缩 */
+  .toolbar { gap: 10px; }
 
   .chips {
     flex-wrap: nowrap;
@@ -1228,14 +1232,13 @@ button { cursor: pointer; }
     width: 100%;
   }
   .chips::-webkit-scrollbar { display: none; }
-  .chip-star { flex: none; }
   .segmented { flex: none; }
 
-  /* 触屏上把两个图标按钮做到 32px，热区正好 44×44 */
+  /* 触屏上把图标按钮做到 32px，热区正好 44 高 */
   .card-actions { gap: 6px; }
-  .star-btn, .tag-btn, .pv-btn { width: 32px; height: 32px; }
-  .star-btn::after, .tag-btn::after, .pv-btn::after { inset: -6px; }
-  .star-btn svg, .tag-btn svg, .pv-btn svg { width: 18px; height: 18px; }
+  .star-btn, .tag-btn, .pv-btn, .del-btn { width: 32px; height: 32px; }
+  .star-btn::after, .tag-btn::after, .pv-btn::after, .del-btn::after { inset: -6px -3px; }
+  .star-btn svg, .tag-btn svg, .pv-btn svg, .del-btn svg { width: 18px; height: 18px; }
 
   .grid { grid-template-columns: 1fr; gap: var(--sp-3); }
 

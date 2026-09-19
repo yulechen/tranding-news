@@ -96,13 +96,22 @@ async function main() {
 
   await check('收藏入口已就位', async () => {
     const html = await (await fetch(`${BASE}/`)).text()
+    // 收藏开关和内容统计都在顶栏，且统计紧跟在「公开可看」后面
+    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
     assert(html.includes('preview-star'), '预览页缺少收藏按钮')
+    assert(topbar.includes('id="btn-fav"'), '顶栏缺少收藏筛选按钮')
+    assert(/id="btn-fav"[^>]*aria-pressed/.test(topbar), '收藏按钮缺少 aria-pressed 状态')
+    assert(topbar.includes('id="stat-text"'), '内容统计不在顶栏')
+    // 收藏开关只留图标，不能有汉字
+    const favBtn = topbar.slice(topbar.indexOf('id="btn-fav"'))
+    const favTag = favBtn.slice(0, favBtn.indexOf('</button>'))
+    assert(!favTag.includes('<span'), '顶栏收藏按钮里还带着文字')
     const js = await (await fetch(`${BASE}/app.js`)).text()
-    assert(js.includes('data-fav'), '缺少收藏筛选按钮')
     assert(js.includes('view.starred'), '缺少收藏筛选状态')
     assert(js.includes('writeHash'), '缺少收藏深链写入')
+    assert(js.includes('syncFavBtn'), '缺少收藏按钮状态同步')
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    assert(css.includes('.chip-star'), '缺少收藏筛选按钮样式')
+    assert(css.includes('.fav-btn'), '缺少顶栏收藏按钮样式')
     assert(css.includes('.card.is-starred'), '缺少已收藏卡片样式')
   })
 
@@ -141,8 +150,25 @@ async function main() {
     assert(!js.includes('view.sort'), 'app.js 仍保留排序状态')
     assert(!js.includes("sort: 'new'"), 'app.js 状态里仍留着排序字段')
     assert(js.includes('byDate(b) - byDate(a)'), 'app.js 未按最新优先排序')
+    // 收藏不参与排序：点收藏不会让卡片跳位，收藏视角里也是时间序
+    assert(!js.includes('星标置顶'), 'app.js 仍在把收藏置顶')
+    assert(!/Number\(!!b\.starred\) - Number\(!!a\.starred\)/.test(js), '收藏仍在参与排序')
     const css = await (await fetch(`${BASE}/styles.css`)).text()
     assert(!css.includes('.select-wrap'), '样式里仍留着排序下拉样式')
+  })
+
+  await check('卡片操作收在卡片顶部', async () => {
+    // 预览 / 收藏 / 标签 / 删除 四个入口都长在卡片自己身上，不用先进预览页
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    assert(js.includes('class="card-actions"'), '卡片缺少顶部操作区')
+    assert(js.includes('data-preview='), '卡片缺少页内预览入口')
+    assert(js.includes('data-star='), '卡片缺少收藏按钮')
+    assert(js.includes('data-tagedit='), '卡片缺少标签按钮')
+    assert(js.includes('data-del='), '卡片缺少删除按钮')
+    assert(js.includes('async function deleteDoc'), '缺少共用的删除实现')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(css.includes('.del-btn'), '缺少删除按钮样式')
+    assert(/\.del-btn::after/.test(css), '删除按钮没有撑出触摸热区')
   })
 
   await check('无障碍与键盘可用', async () => {

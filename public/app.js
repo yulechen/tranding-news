@@ -109,6 +109,12 @@
     msgMsg: $('#msg-msg'),
     msgClose: $('#msg-close'),
 
+    confirmModal: $('#confirm-modal'),
+    confirmTitle: $('#confirm-title'),
+    confirmText: $('#confirm-text'),
+    confirmOk: $('#confirm-ok'),
+    confirmCancel: $('#confirm-cancel'),
+
     toast: $('#toast')
   }
 
@@ -124,6 +130,7 @@
   let current = null
   let currentHtml = ''
   let loading = false
+  let firstPaint = true       // 卡片入场动画只在首屏播一次，切筛选不重播
 
   const view = { type: 'all', tag: '', starred: false }
 
@@ -164,9 +171,113 @@
     return `${(v / 1024 / 1024).toFixed(1)} MB`
   }
 
+  /* ── 弹窗：焦点进出、Esc、遮罩点击统一走这几个函数 ── */
+
+  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), ' +
+    'textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+  let lastFocus = null
+  let scrollLocks = 0
+
+  const isOpen = (node) => !!node && !node.classList.contains('is-hidden')
+
+  function lockScroll() {
+    scrollLocks += 1
+    document.body.style.overflow = 'hidden'
+  }
+  function unlockScroll() {
+    scrollLocks = Math.max(0, scrollLocks - 1)
+    if (!scrollLocks) document.body.style.overflow = ''
+  }
+
+  /** 打开弹窗：记住来源焦点、锁滚动、把焦点送进去 */
+  function openModal(node, focusEl) {
+    const already = isOpen(node)
+    node.classList.remove('is-hidden')
+    if (!already) {
+      lastFocus = document.activeElement
+      lockScroll()
+    }
+    const target = focusEl || node.querySelector(FOCUSABLE)
+    if (target) setTimeout(() => target.focus(), 40)
+  }
+
+  /** 关闭弹窗：焦点还给当初打开它的那个元素 */
+  function closeModal(node) {
+    if (!isOpen(node)) return
+    node.classList.add('is-hidden')
+    unlockScroll()
+    const back = lastFocus
+    lastFocus = null
+    if (back && document.contains(back) && typeof back.focus === 'function') back.focus()
+  }
+
+  /** 当前打开着的弹窗（Tab 焦点陷阱要用） */
+  function activeModal() {
+    const all = document.querySelectorAll('.modal')
+    for (const m of all) if (!m.classList.contains('is-hidden')) return m
+    return null
+  }
+
+  /** Tab 循环锁在弹窗内，别让焦点跑到背后的页面上去 */
+  function trapFocus(e) {
+    const modal = activeModal()
+    if (!modal || e.key !== 'Tab') return
+    const items = [...modal.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null)
+    if (!items.length) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (!modal.contains(document.activeElement)) { e.preventDefault(); first.focus() }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+  }
+
+  /* ── 二次确认：替掉原生 confirm（样式不可控，移动端体验也差） ── */
+
+  let confirmResolve = null
+
+  function confirmAction(opts) {
+    const o = opts || {}
+    el.confirmTitle.textContent = o.title || '确认'
+    el.confirmText.textContent = o.text || ''
+    el.confirmOk.textContent = o.okText || '确定'
+    el.confirmOk.className = 'btn ' + (o.tone === 'danger' ? 'btn-danger-solid' : 'btn-primary')
+    openModal(el.confirmModal, el.confirmOk)
+    return new Promise((resolve) => { confirmResolve = resolve })
+  }
+
+  function settleConfirm(answer) {
+    const done = confirmResolve
+    confirmResolve = null
+    closeModal(el.confirmModal)
+    if (done) done(answer)
+  }
+
+  /** 按钮加载态：转圈 + 禁点，顺手挡住重复提交 */
+  function setBusy(btn, on) {
+    if (!btn) return
+    btn.classList.toggle('is-busy', !!on)
+    btn.disabled = !!on
+  }
+
+  /** 首屏骨架：先给出形状，别让页面空着 */
+  function renderSkeleton(n) {
+    const count = n || 8
+    el.grid.innerHTML = Array.from({ length: count }, () =>
+      '<div class="skeleton-card" aria-hidden="true">' +
+        '<div class="sk sk-badge"></div>' +
+        '<div class="sk sk-title"></div>' +
+        '<div class="sk sk-line"></div>' +
+        '<div class="sk sk-line is-short"></div>' +
+        '<div class="sk sk-foot"></div>' +
+      '</div>').join('')
+  }
+
   let toastTimer = null
   function toast(text, kind) {
     el.toast.textContent = text
+    // 出错要让读屏立刻播报，普通提示排队播就行
+    el.toast.setAttribute('aria-live', kind === 'err' ? 'assertive' : 'polite')
     el.toast.className = 'toast is-on' + (kind ? ` is-${kind}` : '')
     clearTimeout(toastTimer)
     toastTimer = setTimeout(() => {
@@ -198,8 +309,8 @@
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       html,body{margin:0;height:100%}
       body{display:grid;place-items:center;text-align:center;padding:24px;
-        font:14px system-ui,-apple-system,"PingFang SC",sans-serif;color:#8a90a2}
-      b{display:block;color:#4b5162;margin-bottom:8px;font-size:15px;font-weight:600}
+        font:14px system-ui,-apple-system,"PingFang SC",sans-serif;color:#6b7280}
+      b{display:block;color:#454b5c;margin-bottom:8px;font-size:15px;font-weight:600}
     </style></head><body><div>${inner}</div></body></html>`
   }
 
@@ -269,6 +380,9 @@
   async function loadDocs(showToast) {
     if (loading) return
     loading = true
+    el.grid.setAttribute('aria-busy', 'true')
+    if (showToast) setBusy(el.btnRefresh, true)
+    if (!docs.length) renderSkeleton()
     try {
       const { data, error } = await cloud.database
         .from('documents')
@@ -288,6 +402,8 @@
       toast(friendly(err), 'err')
     } finally {
       loading = false
+      el.grid.setAttribute('aria-busy', 'false')
+      setBusy(el.btnRefresh, false)
     }
   }
 
@@ -328,7 +444,7 @@
     })
 
     const starChip =
-      `<button type="button" class="chip chip-star${view.starred ? ' is-active' : ''}" data-fav="1" title="只看收藏">` +
+      `<button type="button" class="chip chip-star${view.starred ? ' is-active' : ''}" data-fav="1" title="只看收藏" aria-pressed="${view.starred}">` +
       starSvg(view.starred) +
       `<span>收藏</span><span class="chip-n">${starredN}</span></button>` +
       `<span class="chip-sep" aria-hidden="true"></span>`
@@ -336,7 +452,7 @@
     el.typeChips.innerHTML = starChip + TYPES.map((t) => {
       const n = counts[t.key] || 0
       if (t.key !== 'all' && n === 0) return ''
-      return `<button type="button" class="chip${view.type === t.key ? ' is-active' : ''}" data-type="${t.key}">${t.label}<span class="chip-n">${n}</span></button>`
+      return `<button type="button" class="chip${view.type === t.key ? ' is-active' : ''}" data-type="${t.key}" aria-pressed="${view.type === t.key}">${t.label}<span class="chip-n">${n}</span></button>`
     }).join('')
 
     const tags = tagCounts(afterType).slice(0, 24)
@@ -353,9 +469,9 @@
       el.tagRow.classList.remove('is-hidden')
       el.tagRow.innerHTML =
         `<span class="tag-row-label">${tagSvg}标签</span>` +
-        `<button type="button" class="tag-pill${!view.tag ? ' is-active' : ''}" data-tag="">全部</button>` +
+        `<button type="button" class="tag-pill${!view.tag ? ' is-active' : ''}" data-tag="" aria-pressed="${!view.tag}">全部</button>` +
         tags.map(([t, n]) =>
-          `<button type="button" class="tag-pill${view.tag === t ? ' is-active' : ''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)} · ${n}</button>`
+          `<button type="button" class="tag-pill${view.tag === t ? ' is-active' : ''}" data-tag="${escapeHtml(t)}" aria-pressed="${view.tag === t}">${escapeHtml(t)} · ${n}</button>`
         ).join('')
     }
   }
@@ -388,25 +504,31 @@
     }
 
     el.empty.classList.add('is-hidden')
+
+    // 入场动画只认首屏，之后切筛选直接出结果，不再抖一遍
+    el.grid.classList.toggle('is-fresh', firstPaint)
+    firstPaint = false
+
     el.grid.innerHTML = list.map((d, i) => {
       const tags = (d.tags || []).slice(0, 4)
       const extra = (d.tags || []).length - tags.length
       const type = TYPE_LABEL[d.doc_type] ? d.doc_type : 'other'
       const delay = Math.min(i, 12) * 24
       const hasTags = (d.tags || []).length > 0
+      const title = escapeHtml(d.title || '未命名')
       return `<article class="card${d.starred ? ' is-starred' : ''}" data-id="${d.id}" style="animation-delay:${delay}ms">
         <div class="card-top">
           <span class="type-badge" data-type="${type}">${TYPE_LABEL[type]}</span>
           <div class="card-actions">
-            <button type="button" class="tag-btn${hasTags ? ' is-on' : ''}" data-tagedit="${d.id}" title="${hasTags ? '编辑标签' : '添加标签'}" aria-label="编辑标签" aria-pressed="${hasTags ? 'true' : 'false'}">
+            <button type="button" class="tag-btn${hasTags ? ' is-on' : ''}" data-tagedit="${d.id}" title="${hasTags ? '编辑标签' : '添加标签'}" aria-label="${hasTags ? '编辑' : '添加'}《${title}》的标签" aria-pressed="${hasTags ? 'true' : 'false'}">
               ${tagSvg}
             </button>
-            <button type="button" class="star-btn${d.starred ? ' is-on' : ''}" data-star="${d.id}" title="${d.starred ? '取消收藏' : '收藏'}" aria-pressed="${d.starred ? 'true' : 'false'}">
+            <button type="button" class="star-btn${d.starred ? ' is-on' : ''}" data-star="${d.id}" title="${d.starred ? '取消收藏' : '收藏'}" aria-label="${d.starred ? '取消收藏' : '收藏'}《${title}》" aria-pressed="${d.starred ? 'true' : 'false'}">
               ${starSvg(!!d.starred)}
             </button>
           </div>
         </div>
-        <h3 class="card-title">${escapeHtml(d.title || '未命名')}</h3>
+        <h3 class="card-title"><a class="card-link" href="#doc-${d.id}" data-open="${d.id}">${title}</a></h3>
         <p class="card-summary">${escapeHtml(d.summary || '—')}</p>
         <div class="card-tags">${tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('')}${extra > 0 ? `<span class="more">+${extra}</span>` : ''}</div>
         <div class="card-foot">
@@ -438,8 +560,14 @@
     el.previewTitle.textContent = doc.title || '未命名'
     syncPreviewStar()
     el.previewFrame.srcdoc = previewShell('正在载入…')
+    const already = isOpen(el.preview)
     el.preview.classList.remove('is-hidden')
-    document.body.style.overflow = 'hidden'
+    if (!already) {
+      lastFocus = document.activeElement
+      lockScroll()
+    }
+    // 键盘用户进来后焦点落在「返回」上，看完直接回车就退出去
+    setTimeout(() => el.previewBack.focus(), 40)
 
     try {
       const html = await fetchContent(doc.id)
@@ -451,12 +579,16 @@
   }
 
   function closePreview() {
+    if (!isOpen(el.preview)) return
     el.preview.classList.add('is-hidden')
     el.previewFrame.srcdoc = ''
     current = null
     currentHtml = ''
+    unlockScroll()
+    const back = lastFocus
+    lastFocus = null
     syncPreviewStar()
-    document.body.style.overflow = ''
+    if (back && document.contains(back)) back.focus()
   }
 
   function downloadHtml(html, name) {
@@ -516,12 +648,17 @@
       renderTagSuggest(el.editTagSuggest, el.editTags)
       el.editType.value = TYPE_KEYS.includes(doc.doc_type) ? doc.doc_type : 'other'
       modalNote(el.editMsg, '')
-      el.editModal.classList.remove('is-hidden')
+      openModal(el.editModal, el.editTitle)
       return
     }
 
     if (act === 'delete') {
-      const ok = window.confirm(`删除「${doc.title || '未命名'}」？\n\n删除后无法恢复。`)
+      const ok = await confirmAction({
+        title: '删除内容',
+        text: `删除《${doc.title || '未命名'}》？\n\n删除后无法恢复。`,
+        okText: '删除',
+        tone: 'danger'
+      })
       if (!ok) return
       try {
         const del = await cloud.database.from('documents').delete().eq('id', doc.id).select('id')
@@ -603,7 +740,7 @@
 
   async function archiveAllInbox() {
     if (!inbox.length) return
-    el.btnArchiveAll.disabled = true
+    setBusy(el.btnArchiveAll, true)
     el.btnArchiveAll.textContent = '归档中…'
     let done = 0
     let failed = 0
@@ -631,8 +768,8 @@
       }
     }
 
-    el.btnArchiveAll.disabled = false
-    el.btnArchiveAll.textContent = '全部归档'
+    setBusy(el.btnArchiveAll, false)
+    el.btnArchiveAll.textContent = '全部入库'
 
     if (done) {
       toast(`已归档 ${done} 个${failed ? `，${failed} 个失败` : ''}`, failed ? 'err' : 'ok')
@@ -644,7 +781,12 @@
   }
 
   async function clearInbox() {
-    const ok = window.confirm(`忽略收件箱里的 ${inbox.length} 个内容？\n\n它们不会被归档，并会从收件箱移除。`)
+    const ok = await confirmAction({
+      title: '忽略收件箱',
+      text: `忽略收件箱里的 ${inbox.length} 个内容？\n\n它们不会被入库，并会从收件箱移除。`,
+      okText: '忽略',
+      tone: 'danger'
+    })
     if (!ok) return
     await inboxFetch('/api/inbox', { method: 'DELETE' })
     toast('已忽略收件箱内容', 'ok')
@@ -663,7 +805,7 @@
       updated_at: new Date().toISOString()
     }
 
-    el.editConfirm.disabled = true
+    setBusy(el.editConfirm, true)
     el.editConfirm.textContent = '保存中…'
 
     try {
@@ -678,7 +820,7 @@
         el.previewTitle.textContent = patch.title
       }
 
-      el.editModal.classList.add('is-hidden')
+      closeModal(el.editModal)
       editing = null
       renderFilters()
       renderDocs()
@@ -686,7 +828,7 @@
     } catch (err) {
       modalNote(el.editMsg, friendly(err), 'error')
     } finally {
-      el.editConfirm.disabled = false
+      setBusy(el.editConfirm, false)
       el.editConfirm.textContent = '保存'
     }
   }
@@ -701,12 +843,11 @@
     el.tagInput.value = ''
     modalNote(el.tagMsg, '')
     renderTagEditor()
-    el.tagModal.classList.remove('is-hidden')
-    setTimeout(() => el.tagInput.focus(), 60)
+    openModal(el.tagModal, el.tagInput)
   }
 
   function closeTagEditor() {
-    el.tagModal.classList.add('is-hidden')
+    closeModal(el.tagModal)
     tagEditing = null
     tagDraft = []
   }
@@ -769,7 +910,7 @@
     const target = tagEditing
     const patch = { tags: tagDraft.slice(0, MAX_TAGS), updated_at: new Date().toISOString() }
 
-    el.tagSave.disabled = true
+    setBusy(el.tagSave, true)
     el.tagSave.textContent = '保存中…'
 
     try {
@@ -788,7 +929,7 @@
     } catch (err) {
       modalNote(el.tagMsg, friendly(err), 'error')
     } finally {
-      el.tagSave.disabled = false
+      setBusy(el.tagSave, false)
       el.tagSave.textContent = '保存'
     }
   }
@@ -822,6 +963,8 @@
     if (!el.previewStar) return
     const on = !!(current && current.starred)
     el.previewStar.classList.toggle('is-on', on)
+    el.previewStar.setAttribute('aria-pressed', on ? 'true' : 'false')
+    el.previewStar.setAttribute('aria-label', on ? '取消收藏' : '收藏')
     const label = el.previewStar.querySelector('span')
     if (label) label.textContent = on ? '已收藏' : '收藏'
   }
@@ -850,6 +993,8 @@
     const n = messages.length
     el.msgBadge.textContent = n > 99 ? '99+' : String(n)
     el.msgBadge.classList.toggle('is-hidden', n === 0)
+    // 角标本身对读屏隐藏，条数并入按钮的可访问名
+    el.btnMsg.setAttribute('aria-label', n ? `留言板，${n} 条留言` : '留言板')
   }
 
   async function loadMessages(silent) {
@@ -888,16 +1033,16 @@
   }
 
   function openMsgBoard() {
-    el.msgModal.classList.remove('is-hidden')
     el.msgAuthor.value = localStorage.getItem(AUTHOR_KEY) || ''
     modalNote(el.msgMsg, '')
     renderMessages()
+    openModal(el.msgModal, el.msgBody)
     loadMessages()
-    setTimeout(() => el.msgBody.focus(), 80)
   }
 
   function closeMsgBoard() {
-    el.msgModal.classList.add('is-hidden')
+    if (!isOpen(el.msgModal)) return
+    closeModal(el.msgModal)
     modalNote(el.msgMsg, '')
   }
 
@@ -916,7 +1061,7 @@
     const author = el.msgAuthor.value.trim()
     try { localStorage.setItem(AUTHOR_KEY, author) } catch (_) { /* 隐私模式忽略 */ }
 
-    el.msgSend.disabled = true
+    setBusy(el.msgSend, true)
     el.msgSend.textContent = '发送中…'
     try {
       const res = await cloud.database.from('messages')
@@ -930,11 +1075,12 @@
       el.msgBody.value = ''
       updateMsgBadge()
       renderMessages()
+      el.msgList.scrollTop = 0          // 新留言在最上面，滚回去让用户看见
       modalNote(el.msgMsg, '已发出', 'ok')
     } catch (err) {
       modalNote(el.msgMsg, friendly(err), 'error')
     } finally {
-      el.msgSend.disabled = false
+      setBusy(el.msgSend, false)
       el.msgSend.textContent = '发送'
     }
   }
@@ -942,7 +1088,13 @@
   async function deleteMessage(id) {
     const m = messages.find((x) => String(x.id) === String(id))
     if (!m) return
-    if (!window.confirm(`删除这条留言？\n\n${String(m.body).slice(0, 60)}`)) return
+    const ok = await confirmAction({
+      title: '删除留言',
+      text: `删除这条留言？\n\n${String(m.body).slice(0, 60)}`,
+      okText: '删除',
+      tone: 'danger'
+    })
+    if (!ok) return
     try {
       const res = await cloud.database.from('messages').delete().eq('id', m.id).select('id')
       if (res.error) throw res.error
@@ -970,11 +1122,12 @@
 
   function openApiDoc() {
     renderApiDoc()
-    el.apiModal.classList.remove('is-hidden')
+    openModal(el.apiModal, el.apiOk)
   }
 
   function closeApiDoc() {
-    el.apiModal.classList.add('is-hidden')
+    if (!isOpen(el.apiModal)) return
+    closeModal(el.apiModal)
   }
 
   function renderApiDoc() {
@@ -1112,6 +1265,10 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
         toggleStar(star.dataset.star)
         return
       }
+      // 卡片正文是铺满整卡的链接：键盘能 Tab 到、回车能开。
+      // 这里拦下默认跳转，改成打开预览，地址栏不会被 #doc-x 弄脏。
+      if (e.target.closest('a.card-link')) e.preventDefault()
+
       const card = e.target.closest('.card')
       if (!card) return
       const doc = docs.find((d) => String(d.id) === card.dataset.id)
@@ -1154,15 +1311,14 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
       if (btn) addSuggestedTag(el.editTags, btn.dataset.suggest)
     })
 
-    el.editClose.addEventListener('click', () => {
-      el.editModal.classList.add('is-hidden')
-      editing = null
-    })
-    el.editCancel.addEventListener('click', () => {
-      el.editModal.classList.add('is-hidden')
-      editing = null
-    })
+    const discardEdit = () => { closeModal(el.editModal); editing = null }
+    el.editClose.addEventListener('click', discardEdit)
+    el.editCancel.addEventListener('click', discardEdit)
     el.editConfirm.addEventListener('click', confirmEdit)
+
+    // 二次确认弹窗的两个出口
+    el.confirmOk.addEventListener('click', () => settleConfirm(true))
+    el.confirmCancel.addEventListener('click', () => settleConfirm(false))
 
     el.btnArchiveAll.addEventListener('click', archiveAllInbox)
     el.btnDismissInbox.addEventListener('click', clearInbox)
@@ -1174,16 +1330,15 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
     })
 
     document.addEventListener('keydown', (e) => {
+      // Tab 锁在弹窗内，别让焦点跑到背后的列表上
+      if (e.key === 'Tab') return trapFocus(e)
       if (e.key !== 'Escape') return
-      if (!el.apiModal.classList.contains('is-hidden')) return closeApiDoc()
-      if (!el.msgModal.classList.contains('is-hidden')) return closeMsgBoard()
-      if (!el.tagModal.classList.contains('is-hidden')) return closeTagEditor()
-      if (!el.editModal.classList.contains('is-hidden')) {
-        el.editModal.classList.add('is-hidden')
-        editing = null
-        return
-      }
-      if (!el.preview.classList.contains('is-hidden')) return closePreview()
+      if (isOpen(el.confirmModal)) return settleConfirm(false)
+      if (isOpen(el.apiModal)) return closeApiDoc()
+      if (isOpen(el.msgModal)) return closeMsgBoard()
+      if (isOpen(el.tagModal)) return closeTagEditor()
+      if (isOpen(el.editModal)) { closeModal(el.editModal); editing = null; return }
+      if (isOpen(el.preview)) return closePreview()
     })
 
     window.addEventListener('hashchange', () => {
@@ -1197,9 +1352,10 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
 
     // 点遮罩关闭（留言板刻意不关：正打字时误触很烦）
     const closers = new Map([
-      [el.editModal, () => { el.editModal.classList.add('is-hidden'); editing = null }],
+      [el.editModal, discardEdit],
       [el.tagModal, closeTagEditor],
-      [el.apiModal, closeApiDoc]
+      [el.apiModal, closeApiDoc],
+      [el.confirmModal, () => settleConfirm(false)]
     ])
     closers.forEach((close, modal) => {
       modal.addEventListener('click', (e) => {
@@ -1224,6 +1380,7 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
 
     el.boot.classList.add('is-hidden')
     el.mainView.classList.remove('is-hidden')
+    renderSkeleton()
     loadDocs()
     loadInbox()
     loadMessages(true)

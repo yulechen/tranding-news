@@ -141,18 +141,19 @@
   <h2>页面上能做什么</h2>
   <table>
     <tr><th>操作</th><th>说明</th></tr>
-    <tr><td>搜索</td><td>按标题、摘要、标签关键词过滤，输入即时生效</td></tr>
-    <tr><td>类型筛选</td><td>报告 / 看板 / 工具 / 页面 / 其他，顶栏一排小标签切换</td></tr>
-    <tr><td>星标</td><td>重要的内容标个星，置顶显示</td></tr>
+    <tr><td>标签</td><td>每张卡片右上角点一下就能打标签，顶部按标签筛选 —— 标签由你自己维护</td></tr>
+    <tr><td>收藏</td><td>工具条第一个「收藏」只看收藏；卡片星标或预览页按钮随时加 / 取消</td></tr>
+    <tr><td>类型筛选</td><td>报告 / 看板 / 工具 / 页面 / 其他，工具条一排小标签切换</td></tr>
     <tr><td>在线预览</td><td>点卡片直接在隔离的画布里渲染，不会污染主页面</td></tr>
-    <tr><td>编辑</td><td>改标题、摘要、标签，或整段替换内容</td></tr>
-    <tr><td>添加内容</td><td>右上角入口，拖 HTML 文件进去，或直接粘贴源码</td></tr>
+    <tr><td>编辑信息</td><td>改标题、摘要、标签、类型（预览页里）</td></tr>
+    <tr><td>接口 / 留言</td><td>顶栏可查推送接口文档，也能留一句话</td></tr>
+    <tr><td>排序</td><td>固定按时间倒序，最新的在最前面，收藏的置顶</td></tr>
   </table>
 
   <h2>命令行推送</h2>
   <div class="card">
-    <pre><span class="c"># 直接入库，内容立刻出现在页面上</span>
-node tools/push.mjs --file 快报.html --title "美股盘前快报" --tags 美股,盘前
+    <pre><span class="c"># 直接入库，内容立刻出现在页面上（推送不写标签，标签在页面上手工维护）</span>
+node tools/push.mjs --file 快报.html --title "美股盘前快报"
 
 <span class="c"># 先暂存到收件箱，之后在页面上点「全部归档」</span>
 node tools/push.mjs --file 快报.html --title "美股盘前快报" --inbox
@@ -167,6 +168,7 @@ cat 快报.html | node tools/push.mjs --stdin --title "美股盘前快报"</pre>
     <div class="tip"><b><span class="dot">●</span> 单条上限 2MB</b>超了会拒绝，太大的页面建议拆开或压缩内嵌资源。</div>
     <div class="tip"><b><span class="dot">●</span> 列表不拉正文</b>首页只取标题和元信息，点开才按需加载内容，所以列表很快。</div>
     <div class="tip"><b><span class="dot">●</span> 预览是隔离的</b>内容渲染在独立环境里，里面的脚本碰不到管理系统本身。</div>
+    <div class="tip"><b><span class="dot">●</span> 标签自己维护</b>推送不会自动打标签，免得词越堆越乱；在卡片上手工打，顶部按标签筛。</div>
   </div>
 
   <footer>云端信息库 · 内容管理与查看</footer>

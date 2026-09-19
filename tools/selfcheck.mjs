@@ -145,6 +145,24 @@ async function main() {
     assert(!css.includes('.select-wrap'), '样式里仍留着排序下拉样式')
   })
 
+  await check('无障碍与键盘可用', async () => {
+    // 生产底线：键盘能走完全流程、弹窗焦点不逃逸、读屏能听到反馈
+    const html = await (await fetch(`${BASE}/`)).text()
+    assert(html.includes('class="skip-link"'), '缺少跳到主内容的跳转链接')
+    assert(html.includes('aria-modal="true"'), '弹窗未声明 aria-modal')
+    assert(html.includes('role="dialog"'), '弹窗缺少 dialog 角色')
+    assert(html.includes('aria-live'), '缺少 live region（toast / 状态提示）')
+    assert(html.includes('aria-busy'), '列表未声明加载中状态')
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    assert(js.includes('trapFocus'), '弹窗未做 Tab 焦点陷阱')
+    assert(js.includes('aria-pressed'), '筛选 / 收藏状态未暴露给辅助技术')
+    assert(js.includes('card-link'), '卡片缺少可聚焦的打开入口')
+    assert(!js.includes('window.confirm'), '仍在用原生 confirm')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(css.includes(':focus-visible'), '缺少键盘焦点样式')
+    assert(css.includes('prefers-reduced-motion'), '未尊重系统的减弱动态效果')
+  })
+
   await check('接口说明用真实端点，不写死', async () => {
     const html = await (await fetch(`${BASE}/`)).text()
     assert(html.includes('id="api-modal"'), '缺少接口说明弹窗')

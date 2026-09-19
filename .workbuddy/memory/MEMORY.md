@@ -83,12 +83,30 @@
 - 两者**都不等于**当前列表条数，这是刻意的：每个选项上的数字要代表「点进去大概有几条」
 - 选中的标签若被类型筛成 0 条，仍要留在标签行里，否则用户看不到自己卡在哪个筛选上、退不出来
 
+## 设计系统与无障碍（2026-09-19 生产级打磨后）
+- **所有数值只在 `public/styles.css` 顶部的 `:root` token 里**：色彩、间距（4 的倍数）、
+  7 级字阶（`--fs-2xs…--fs-xl`）、6 级圆角（`--r-xs…--r-xl`）、阴影、动效时长。
+  规则里不要再写字面值；改主题只动 token。
+- 🚫 **`:focus-visible` 焦点环是无障碍底线**，别删；文本输入类用 box-shadow 环画焦点，
+  所以单独 `outline: none`，避免双环。
+- **卡片打开方式是 stretched link**（`.card-link` + 伪元素 `inset:0`），不是给卡片加
+  `role="button" tabindex="0"`：卡内还有星标 / 标签按钮，"按钮套按钮"在 ARIA 上是违规的。
+  尺寸改动注意 `.card-actions` 的 `z-index: 2`（要压过铺满整卡的链接伪元素）。
+  因为 `.card { overflow: hidden }`，卡片焦点环只能画成 `inset` 阴影，画不到外面。
+- **弹窗一律走 `openModal/closeModal`**（焦点还原 + 计数式滚动锁 + `trapFocus` 焦点陷阱），
+  别再用 `classList.remove('is-hidden')` 裸开。
+- 🚫 **不要用原生 `window.confirm`**：统一走 `confirmAction({title,text,okText,tone})`（返回 Promise）。
+  自检里有断言挡着这两条回潮。
+- 动效要尊重 `prefers-reduced-motion`；只有 hover 才出现的元素，触屏要靠
+  `@media (hover: none)` 常显。
+
 ## 项目级约束
 - 平台网关占用 `/healthz`；应用自己的健康检查是 `/api/health`
-- 🚫 **页面刻意不提供上传入口与搜索**（用户 2026-09-19 要求）：内容只从 WorkBuddy 推过来，查找全靠标签。
-  自检里有「页面不含上传入口与搜索」一项守着，别再手痒加回去。
+- 🚫 **页面刻意不提供上传入口、搜索与排序控件**（用户 2026-09-19 要求）：内容只从 WorkBuddy 推过来，
+  查找全靠标签，排序固定「最新优先」（不再有下拉）。自检里「页面不含上传入口与搜索」与
+  「固定最新优先，无排序控件」两条守着，别再手痒加回去。
 - 本机 bash 没有 coreutils，脚本一律用 node 写，不要用 ls/dirname/cat
-- 每次改完代码跑 `node tools/selfcheck.mjs [--base <url>]`，**25 项**要全绿
+- 每次改完代码跑 `node tools/selfcheck.mjs [--base <url>]`，**本地 27 项 / 线上 29 项**要全绿
   （「开放接口」那组只在非 localhost 地址上执行，本地会打印跳过原因）
 - **UI 改动必须实际截图看过再交付**：`node tools/shot.mjs --out x.png --script "<JS>"`，
   用本机 Chrome 的 CDP 无头模式，能执行一段 JS 后再截图（拍交互后的状态），零安装零依赖。

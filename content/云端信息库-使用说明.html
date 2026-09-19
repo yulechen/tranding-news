@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>云端信息库 · 使用说明</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --line: #e6e8ec;
+    --ink: #14171c;
+    --ink2: #5b6472;
+    --ink3: #8b95a3;
+    --accent: #2f6bff;
+    --accent-soft: #eef3ff;
+    --ok: #12a06a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 64px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header { margin-bottom: 32px; }
+  .eyebrow {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .02em;
+  }
+  h1 { margin: 14px 0 6px; font-size: 30px; line-height: 1.25; letter-spacing: -.02em; }
+  .sub { margin: 0; color: var(--ink2); font-size: 15px; }
+  h2 {
+    margin: 36px 0 14px;
+    font-size: 17px;
+    letter-spacing: -.01em;
+    padding-left: 11px;
+    border-left: 3px solid var(--accent);
+    line-height: 1.2;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 22px;
+  }
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; gap: 14px; padding: 12px 0; }
+  .step + .step { border-top: 1px dashed var(--line); }
+  .num {
+    flex: 0 0 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 3px;
+  }
+  .step b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+  .step span { color: var(--ink2); font-size: 13.5px; }
+  code {
+    background: #f1f3f6;
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 13px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    color: #2d3646;
+  }
+  pre {
+    margin: 0;
+    background: #14171c;
+    color: #e7ecf3;
+    border-radius: 10px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.65;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  pre .c { color: #7d8899; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink3); font-weight: 600; font-size: 12px; letter-spacing: .03em; }
+  td:first-child { width: 34%; font-weight: 600; }
+  td:last-child { color: var(--ink2); }
+  tr:last-child td { border-bottom: 0; }
+  .tips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tip {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 13.5px;
+    color: var(--ink2);
+  }
+  .tip b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 3px; }
+  .dot { color: var(--ok); font-weight: 700; }
+  footer { margin-top: 40px; color: var(--ink3); font-size: 12.5px; text-align: center; }
+  @media (max-width: 560px) {
+    body { padding: 24px 14px 48px; }
+    h1 { font-size: 24px; }
+    .tips { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">云端信息库</span>
+    <h1>你的内容，收在一个地方</h1>
+    <p class="sub">在微信里让 WorkBuddy 生成的 HTML，全部归档到这里统一查看。</p>
+  </header>
+
+  <h2>内容是怎么进来的</h2>
+  <div class="card flow">
+    <div class="step">
+      <div class="num">1</div>
+      <div><b>你在微信里发指令</b><span>比如「做一份美股盘前快报」，WorkBuddy 在本地生成一个 HTML 文件。</span></div>
+    </div>
+    <div class="step">
+      <div class="num">2</div>
+      <div><b>自动推进云端信息库</b><span>内容连同标题、摘要、标签一起写入云端，不需要你手动传。</span></div>
+    </div>
+    <div class="step">
+      <div class="num">3</div>
+      <div><b>打开链接就能看</b><span>列表按时间倒序，点开直接在页面里渲染，也能新窗口打开或下载。</span></div>
+    </div>
+  </div>
+
+  <h2>页面上能做什么</h2>
+  <table>
+    <tr><th>操作</th><th>说明</th></tr>
+    <tr><td>搜索</td><td>按标题、摘要、标签关键词过滤，输入即时生效</td></tr>
+    <tr><td>类型筛选</td><td>报告 / 看板 / 工具 / 页面 / 其他，顶栏一排小标签切换</td></tr>
+    <tr><td>星标</td><td>重要的内容标个星，置顶显示</td></tr>
+    <tr><td>在线预览</td><td>点卡片直接在隔离的画布里渲染，不会污染主页面</td></tr>
+    <tr><td>编辑</td><td>改标题、摘要、标签，或整段替换内容</td></tr>
+    <tr><td>添加内容</td><td>右上角入口，拖 HTML 文件进去，或直接粘贴源码</td></tr>
+  </table>
+
+  <h2>命令行推送</h2>
+  <div class="card">
+    <pre><span class="c"># 直接入库，内容立刻出现在页面上</span>
+node tools/push.mjs --file 快报.html --title "美股盘前快报" --tags 美股,盘前
+
+<span class="c"># 先暂存到收件箱，之后在页面上点「全部归档」</span>
+node tools/push.mjs --file 快报.html --title "美股盘前快报" --inbox
+
+<span class="c"># 从标准输入读，适合管道串联</span>
+cat 快报.html | node tools/push.mjs --stdin --title "美股盘前快报"</pre>
+  </div>
+
+  <h2>几个小知识</h2>
+  <div class="tips">
+    <div class="tip"><b><span class="dot">●</span> 公开可看</b>没有登录，任何人打开链接都能浏览里面的内容。</div>
+    <div class="tip"><b><span class="dot">●</span> 单条上限 2MB</b>超了会拒绝，太大的页面建议拆开或压缩内嵌资源。</div>
+    <div class="tip"><b><span class="dot">●</span> 列表不拉正文</b>首页只取标题和元信息，点开才按需加载内容，所以列表很快。</div>
+    <div class="tip"><b><span class="dot">●</span> 预览是隔离的</b>内容渲染在独立环境里，里面的脚本碰不到管理系统本身。</div>
+  </div>
+
+  <footer>云端信息库 · 内容管理与查看</footer>
+
+</div>
+</body>
+</html>

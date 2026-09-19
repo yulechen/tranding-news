@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>云端信息库</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="theme-color" content="#4f46e5">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<!-- ══════════ 启动中 ══════════ -->
+<div id="boot" class="boot">
+  <div class="boot-mark">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><circle cx="11.7" cy="14.3" r="4"/><circle cx="16.2" cy="11.6" r="5.4"/><circle cx="20.7" cy="14.7" r="3.6"/><rect x="11.7" y="13.3" width="9" height="5"/></g><path d="M10.6 21.05 v1.1 a2.5 2.5 0 0 0 2.5 2.5 h5.8 a2.5 2.5 0 0 0 2.5 -2.5 v-1.1" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/></svg>
+  </div>
+  <p>正在载入…</p>
+</div>
+
+<!-- ══════════ 主界面 ══════════ -->
+<div id="main-view" class="main-view is-hidden">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><circle cx="11.7" cy="14.3" r="4"/><circle cx="16.2" cy="11.6" r="5.4"/><circle cx="20.7" cy="14.7" r="3.6"/><rect x="11.7" y="13.3" width="9" height="5"/></g><path d="M10.6 21.05 v1.1 a2.5 2.5 0 0 0 2.5 2.5 h5.8 a2.5 2.5 0 0 0 2.5 -2.5 v-1.1" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/></svg>
+      </div>
+      <span class="brand-name">云端信息库</span>
+      <span class="pub-badge">公开可看</span>
+    </div>
+
+    <div class="topbar-actions">
+      <button type="button" class="btn btn-ghost" id="btn-refresh" title="重新载入">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11a8.5 8.5 0 10-2.5 6.4M20.5 5v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>刷新</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="content">
+
+    <section class="inbox-bar is-hidden" id="inbox-bar">
+      <div class="inbox-icon">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9m0 0l-3.5-3.5M12 12l3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="inbox-text">
+        <strong id="inbox-count">0</strong> 个新内容待入库
+        <span class="inbox-hint" id="inbox-hint"></span>
+      </div>
+      <div class="inbox-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-archive-all">全部入库</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-dismiss-inbox">忽略</button>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <div class="chips" id="type-chips"></div>
+      <div class="toolbar-right">
+        <span class="stat" id="stat-text"></span>
+        <label class="select-wrap">
+          <select id="sort">
+            <option value="new">最新优先</option>
+            <option value="old">最早优先</option>
+            <option value="title">按标题</option>
+            <option value="size">按大小</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="tag-row is-hidden" id="tag-row"></section>
+
+    <section class="grid" id="doc-grid"></section>
+
+    <section class="empty is-hidden" id="empty">
+      <div class="empty-mark">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="7" width="30" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M17 18h14M17 25h14M17 32h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </div>
+      <h3 id="empty-title">还是空的</h3>
+      <p id="empty-desc">WorkBuddy 推送过来的内容会出现在这里。给它们打上标签，以后就能按标签快速翻出来。</p>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════ 预览 ══════════ -->
+<div id="preview" class="preview is-hidden">
+  <div class="preview-bar">
+    <button type="button" class="btn btn-ghost btn-sm" id="preview-back">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      返回
+    </button>
+    <div class="preview-title" id="preview-title"></div>
+    <div class="preview-actions">
+      <button type="button" class="btn btn-ghost btn-sm btn-star" data-act="star" id="preview-star" title="收藏 / 取消收藏">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.85z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>收藏</span>
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="tag" title="编辑标签">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 12.9l-7.7 7.7a1.5 1.5 0 01-2.1 0l-7.4-7.4a1.5 1.5 0 01-.44-1.06V5.5a1.5 1.5 0 011.5-1.5h6.6c.4 0 .78.16 1.06.44l7.5 7.5a1.5 1.5 0 010 2.06z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><circle cx="8.5" cy="8.5" r="1.45" fill="currentColor"/></svg>
+        <span>标签</span>
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="open">新窗口</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="download">下载</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="edit">编辑信息</button>
+      <button type="button" class="btn btn-ghost btn-sm btn-danger" data-act="delete">删除</button>
+    </div>
+  </div>
+  <div class="preview-body">
+    <iframe id="preview-frame" title="内容预览" sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock"></iframe>
+  </div>
+</div>
+
+<!-- ══════════ 编辑标签 ══════════ -->
+<div id="tag-modal" class="modal is-hidden">
+  <div class="modal-card modal-card-sm">
+    <div class="modal-head">
+      <h2>编辑标签</h2>
+      <button type="button" class="icon-btn" id="tag-close" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <p class="tag-doc" id="tag-doc"></p>
+
+      <div class="field">
+        <span class="field-label">添加标签</span>
+        <input type="text" id="tag-input" placeholder="输入后按回车，或用逗号分隔" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="tag-current" id="tag-current"></div>
+      <div class="tag-pool" id="tag-pool"></div>
+
+      <p class="modal-msg" id="tag-msg"></p>
+    </div>
+
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="tag-cancel">取消</button>
+      <button type="button" class="btn btn-primary" id="tag-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 编辑信息 ══════════ -->
+<div id="edit-modal" class="modal is-hidden">
+  <div class="modal-card modal-card-sm">
+    <div class="modal-head">
+      <h2>编辑信息</h2>
+      <button type="button" class="icon-btn" id="edit-close" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <span class="field-label">标题</span>
+        <input type="text" id="edit-title">
+      </div>
+      <div class="field">
+        <span class="field-label">摘要</span>
+        <textarea id="edit-summary" rows="3"></textarea>
+      </div>
+      <div class="field">
+        <span class="field-label">标签 <em>逗号分隔</em></span>
+        <input type="text" id="edit-tags">
+        <div class="tag-suggest is-hidden" id="edit-tag-suggest"></div>
+      </div>
+      <div class="field">
+        <span class="field-label">类型</span>
+        <select id="edit-type">
+          <option value="report">报告</option>
+          <option value="dashboard">看板</option>
+          <option value="tool">工具</option>
+          <option value="page">页面</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+      <p class="modal-msg" id="edit-msg"></p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="edit-cancel">取消</button>
+      <button type="button" class="btn btn-primary" id="edit-confirm">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="./config.js"></script>
+<script src="./vendor/workbuddy-cloud-sdk.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

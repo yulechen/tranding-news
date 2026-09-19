@@ -1,0 +1,13 @@
+{
+  "name": "info-vault",
+  "version": "1.0.0",
+  "private": true,
+  "description": "云端信息库 —— 由 WorkBuddy 生成的 HTML 内容的统一管理与查看",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

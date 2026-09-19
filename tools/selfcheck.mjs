@@ -163,6 +163,18 @@ async function main() {
     assert(css.includes('prefers-reduced-motion'), '未尊重系统的减弱动态效果')
   })
 
+  await check('打开方式：卡片默认新窗口', async () => {
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    assert(js.includes('openInNewWindow'), '缺少「新窗口打开」的实现')
+    // 必须**同步**先开占位窗，否则 await 拉正文之后 window.open 会被弹窗拦截器拦掉
+    assert(js.includes(`window.open('', '_blank')`), '新窗口不是同步开的，会被浏览器当弹窗拦掉')
+    assert(/data-preview=/.test(js), '卡片缺少页内预览入口')
+    // 卡片正文那一段点击处理必须落到新窗口；页内预览只留给眼睛按钮
+    const at = js.indexOf("el.grid.addEventListener('click'")
+    const cardClick = js.slice(at, at + 2200)
+    assert(cardClick.includes('openInNewWindow(doc)'), '点击卡片默认不是新窗口打开')
+  })
+
   await check('接口说明用真实端点，不写死', async () => {
     const html = await (await fetch(`${BASE}/`)).text()
     assert(html.includes('id="api-modal"'), '缺少接口说明弹窗')

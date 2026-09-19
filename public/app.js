@@ -42,6 +42,10 @@
   const tagSvg =
     `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${TAG_PATH}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><circle cx="8.5" cy="8.5" r="1.45" fill="currentColor"/></svg>`
 
+  // 卡片上的「页内预览」入口（点击卡片本身默认走新窗口）
+  const eyeSvg =
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.7 12S6.3 6.3 12 6.3 21.3 12 21.3 12 17.7 17.7 12 17.7 2.7 12 2.7 12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`
+
   const $ = (sel) => document.querySelector(sel)
 
   const el = {
@@ -523,6 +527,9 @@
         <div class="card-top">
           <span class="type-badge" data-type="${type}">${TYPE_LABEL[type]}</span>
           <div class="card-actions">
+            <button type="button" class="pv-btn" data-preview="${d.id}" title="页内预览" aria-label="页内预览《${title}》">
+              ${eyeSvg}
+            </button>
             <button type="button" class="tag-btn${hasTags ? ' is-on' : ''}" data-tagedit="${d.id}" title="${hasTags ? '编辑标签' : '添加标签'}" aria-label="${hasTags ? '编辑' : '添加'}《${title}》的标签" aria-pressed="${hasTags ? 'true' : 'false'}">
               ${tagSvg}
             </button>
@@ -531,7 +538,7 @@
             </button>
           </div>
         </div>
-        <h3 class="card-title"><a class="card-link" href="#doc-${d.id}" data-open="${d.id}">${title}</a></h3>
+        <h3 class="card-title"><a class="card-link" href="#doc-${d.id}" data-open="${d.id}" title="在新窗口打开">${title}</a></h3>
         <p class="card-summary">${escapeHtml(d.summary || '—')}</p>
         <div class="card-tags">${tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('')}${extra > 0 ? `<span class="more">+${extra}</span>` : ''}</div>
         <div class="card-foot">
@@ -606,6 +613,71 @@
     setTimeout(() => URL.revokeObjectURL(url), 4000)
   }
 
+  // 新窗口的占位页：极简、不依赖站内样式，正文到之前先让用户看到「在载入」
+  function windowShell(title, message) {
+    return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">` +
+      `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+      `<title>${escapeHtml(title || '内容')}</title><style>` +
+      `html,body{margin:0;height:100%}` +
+      `body{display:grid;place-items:center;background:#f4f5f7;color:#6b7280;` +
+      `font:15px/1.7 system-ui,-apple-system,"PingFang SC",sans-serif}` +
+      `.box{text-align:center;padding:40px 24px;max-width:34em}` +
+      `.spin{width:26px;height:26px;margin:0 auto 14px;border-radius:50%;` +
+      `border:2.5px solid #dfe3ea;border-top-color:#2563eb;animation:sp .8s linear infinite}` +
+      `@keyframes sp{to{transform:rotate(360deg)}}` +
+      `@media (prefers-reduced-motion:reduce){.spin{animation:none}}` +
+      `</style></head><body><div class="box">${message === '正在载入…' ? '<div class="spin"></div>' : ''}${message || '正在载入…'}</div></body></html>`
+  }
+
+  /**
+   * 在新窗口打开内容 —— 这是卡片的**默认**打开方式。
+   *
+   * ⚠️ 顺序不能改：`window.open` 必须**同步**调用。正文要现拉（列表不取 content 字段），
+   * 一旦先 await 再 open，浏览器就不再把这当成用户手势的一部分，新窗口会被弹窗拦截器拦掉。
+   * 所以这里先同步开一个空白窗占位、写入载入页，拿到正文后再把窗口导航到 blob URL。
+   */
+  async function openInNewWindow(doc, preloaded) {
+    if (!doc) return
+    const win = window.open('', '_blank')
+    if (!win) {
+      toast('新窗口被浏览器拦住了，允许本站弹出窗口后再试', 'err')
+      return
+    }
+
+    try {
+      win.document.write(windowShell(doc.title, '正在载入…'))
+      win.document.close()
+    } catch (e) {
+      /* 少数浏览器不允许写空白窗，那就只等后面的导航，不再兜底 */
+    }
+
+    let html = ''
+    try {
+      html = preloaded || await fetchContent(doc.id)
+    } catch (err) {
+      try {
+        win.document.body.innerHTML =
+          `<div class="box">内容载入失败：${escapeHtml(friendly(err))}</div>`
+      } catch (e) {
+        /* 用户可能已经把新窗口关了 */
+      }
+      toast(friendly(err), 'err')
+      return
+    }
+
+    try {
+      const blob = new Blob([html || windowShell(doc.title, '这条内容是空的')], {
+        type: 'text/html;charset=utf-8'
+      })
+      const url = URL.createObjectURL(blob)
+      win.location.replace(url)
+      // 窗口可能开着很久，刷新也还用得到这个地址，给足时间再回收
+      setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000)
+    } catch (e) {
+      /* 正文拿到了但占位窗已被关掉 —— 静默即可，不是错误 */
+    }
+  }
+
   async function actOnCurrent(act) {
     const doc = current
     if (!doc) return
@@ -621,15 +693,8 @@
     }
 
     if (act === 'open') {
-      try {
-        if (!currentHtml) currentHtml = await fetchContent(doc.id)
-        const blob = new Blob([currentHtml], { type: 'text/html;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        window.open(url, '_blank', 'noopener')
-        setTimeout(() => URL.revokeObjectURL(url), 60000)
-      } catch (err) {
-        toast(friendly(err), 'err')
-      }
+      // 走到这里说明正文多半已经在内存里了，直接复用
+      await openInNewWindow(doc, currentHtml)
       return
     }
 
@@ -1255,6 +1320,13 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
     })
 
     el.grid.addEventListener('click', (e) => {
+      const pvBtn = e.target.closest('[data-preview]')
+      if (pvBtn) {
+        e.stopPropagation()
+        const doc = docs.find((d) => String(d.id) === pvBtn.dataset.preview)
+        if (doc) openPreview(doc)
+        return
+      }
       const tagBtn = e.target.closest('[data-tagedit]')
       if (tagBtn) {
         e.stopPropagation()
@@ -1269,13 +1341,15 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
         return
       }
       // 卡片正文是铺满整卡的链接：键盘能 Tab 到、回车能开。
-      // 这里拦下默认跳转，改成打开预览，地址栏不会被 #doc-x 弄脏。
+      // 拦下默认跳转，改成在新窗口打开，地址栏不会被 #doc-x 弄脏。
       if (e.target.closest('a.card-link')) e.preventDefault()
 
       const card = e.target.closest('.card')
       if (!card) return
       const doc = docs.find((d) => String(d.id) === card.dataset.id)
-      if (doc) openPreview(doc)
+      // 默认打开方式：新窗口。页内预览走卡片右上角那个眼睛按钮。
+      // 注意不要 await —— openInNewWindow 内部要同步把 window.open 发出去，保住用户手势。
+      if (doc) openInNewWindow(doc)
     })
 
     // 标签弹窗

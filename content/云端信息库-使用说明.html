@@ -134,7 +134,7 @@
     </div>
     <div class="step">
       <div class="num">3</div>
-      <div><b>打开链接就能看</b><span>列表按时间倒序，点开直接在页面里渲染，也能新窗口打开或下载。</span></div>
+      <div><b>打开链接就能看</b><span>列表按时间倒序。点卡片默认在新窗口打开，也能页内预览或下载。</span></div>
     </div>
   </div>
 
@@ -144,7 +144,8 @@
     <tr><td>标签</td><td>每张卡片右上角点一下就能打标签，顶部按标签筛选 —— 标签由你自己维护</td></tr>
     <tr><td>收藏</td><td>工具条第一个「收藏」只看收藏；卡片星标或预览页按钮随时加 / 取消</td></tr>
     <tr><td>类型筛选</td><td>报告 / 看板 / 工具 / 页面 / 其他，工具条一排小标签切换</td></tr>
-    <tr><td>在线预览</td><td>点卡片直接在隔离的画布里渲染，不会污染主页面</td></tr>
+    <tr><td>打开内容</td><td>点卡片默认在新窗口打开，整页看，不受页面宽度限制</td></tr>
+    <tr><td>页内预览</td><td>卡片右上角第一个按钮（眼睛），在当前页不出门就能扫一眼</td></tr>
     <tr><td>编辑信息</td><td>改标题、摘要、标签、类型（预览页里）</td></tr>
     <tr><td>接口 / 留言</td><td>顶栏可查推送接口文档，也能留一句话</td></tr>
     <tr><td>排序</td><td>固定按时间倒序，最新的在最前面，收藏的置顶</td></tr>
@@ -167,7 +168,7 @@ cat 快报.html | node tools/push.mjs --stdin --title "美股盘前快报"</pre>
     <div class="tip"><b><span class="dot">●</span> 公开可看</b>没有登录，任何人打开链接都能浏览里面的内容。</div>
     <div class="tip"><b><span class="dot">●</span> 单条上限 2MB</b>超了会拒绝，太大的页面建议拆开或压缩内嵌资源。</div>
     <div class="tip"><b><span class="dot">●</span> 列表不拉正文</b>首页只取标题和元信息，点开才按需加载内容，所以列表很快。</div>
-    <div class="tip"><b><span class="dot">●</span> 预览是隔离的</b>内容渲染在独立环境里，里面的脚本碰不到管理系统本身。</div>
+    <div class="tip"><b><span class="dot">●</span> 页内预览是隔离的</b>在独立环境里渲染，里面的脚本碰不到管理系统本身。</div>
     <div class="tip"><b><span class="dot">●</span> 标签自己维护</b>推送不会自动打标签，免得词越堆越乱；在卡片上手工打，顶部按标签筛。</div>
   </div>
 

@@ -2,6 +2,10 @@
 
 ## 关键标识
 - 云应用 appId：`wbapp_nYUBg7YCbzNbEX9V2pDJ4d` —— **发布时必须复用这个 id**，换新 id 会导致域名变、云登录 Origin 校验失败
+- 重新发布的调用式：`action` 默认 deploy，带 `appId` + `domainPrefix: "info-vault"` +
+  **`userAskedToPublish: true`（对应用户当轮明确说「上线」）+ `updateExistingApp: true`**
+  —— 后两个都不能省：前者是平台的发布同意校验（**不跨轮继承**，改了内容就必须重新问），
+  后者保证复用同一 app 且**不改动它的显示名**。
 - 线上地址 / 云数据面 endpoint：`https://info-vault.app.workbuddy.host`
 - 收件箱写入密钥 `INGEST_KEY`：出现在 **4 处**，改一处必须全改 ——
   `server.js` 与 `tools/push.mjs`、`tools/selfcheck.mjs` 里的 `process.env.INGEST_KEY || '...'` 兜底，
@@ -141,6 +145,11 @@
 - 图标光栅化：`node tools/make-icons.mjs`
 
 ## 前端功能点（避免重复实现）
+- **打开方式：点卡片默认「新窗口」**（用户 2026-09-19 要求）。页内预览降级为卡片右上角的
+  眼睛按钮（`[data-preview]` → `openPreview`）；预览浮层顶栏的「新窗口」按钮复用同一函数。
+  实现要点：`openInNewWindow` 里 **`window.open` 必须同步发** —— 先开空白占位窗 + 写入载入页，
+  正文拿到后再 `win.location.replace(blobUrl)`；先 `await` 再 `open` 会被弹窗拦截器拦掉。
+  自检里「打开方式：卡片默认新窗口」一组守着这条，含「必须同步开窗」的断言。
 - 收藏：工具条首个 chip（`data-fav`）切换只看收藏；状态存 DB `documents.starred`；
   深链 `#fav`；预览页顶栏也有收藏按钮；卡片 `is-starred` 有琥珀色顶条
 - 筛选都是前端本地过滤（一次拉最多 500 条列表，不带 `content`）

@@ -652,7 +652,7 @@ button { cursor: pointer; }
 }
 
 /* 两个图标按钮：视觉 27px，热区撑到 44px（触屏再单独加大） */
-.star-btn, .tag-btn {
+.star-btn, .tag-btn, .pv-btn {
   position: relative;
   width: 27px; height: 27px;
   display: grid; place-items: center;
@@ -662,12 +662,12 @@ button { cursor: pointer; }
   transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
               transform var(--dur-1) var(--ease);
 }
-.star-btn::after, .tag-btn::after {
+.star-btn::after, .tag-btn::after, .pv-btn::after {
   content: "";
   position: absolute;
   inset: -8px -4px;
 }
-.star-btn svg, .tag-btn svg { width: 16px; height: 16px; }
+.star-btn svg, .tag-btn svg, .pv-btn svg { width: 16px; height: 16px; }
 
 .star-btn:hover { background: var(--star-soft); color: var(--star); transform: scale(1.08); }
 .star-btn.is-on { color: var(--star); }
@@ -675,6 +675,9 @@ button { cursor: pointer; }
 
 .tag-btn:hover { background: var(--accent-soft); color: var(--accent); transform: scale(1.08); }
 .tag-btn.is-on { color: var(--accent); background: var(--accent-soft); }
+
+/* 页内预览：中性灰 hover，不跟强调色抢戏（默认打开方式是点卡片 → 新窗口） */
+.pv-btn:hover { background: var(--surface-3); color: var(--ink); transform: scale(1.08); }
 
 /* ── 预览页的收藏按钮 ── */
 .btn-star svg { width: 15px; height: 15px; color: var(--star); }
@@ -1230,9 +1233,9 @@ button { cursor: pointer; }
 
   /* 触屏上把两个图标按钮做到 32px，热区正好 44×44 */
   .card-actions { gap: 6px; }
-  .star-btn, .tag-btn { width: 32px; height: 32px; }
-  .star-btn::after, .tag-btn::after { inset: -6px; }
-  .star-btn svg, .tag-btn svg { width: 18px; height: 18px; }
+  .star-btn, .tag-btn, .pv-btn { width: 32px; height: 32px; }
+  .star-btn::after, .tag-btn::after, .pv-btn::after { inset: -6px; }
+  .star-btn svg, .tag-btn svg, .pv-btn svg { width: 18px; height: 18px; }
 
   .grid { grid-template-columns: 1fr; gap: var(--sp-3); }
 

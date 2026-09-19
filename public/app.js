@@ -2,6 +2,7 @@
    云端信息库 · 前端逻辑
    无需登录，打开即看；内容正文直接存在云数据库里。
    内容的组织靠标签：每张卡片都能随手打标签，顶部按标签过滤。
+   顶栏另有「接口」（推送数据的开放接口说明）与「留言」（留言板）。
    ═══════════════════════════════════════════════════════════ */
 
 (function () {
@@ -12,6 +13,15 @@
   const MAX_CONTENT = 2 * 1024 * 1024       // 单个内容上限 2MB
 
   const LIST_FIELDS = 'id,title,summary,tags,doc_type,source,file_size,starred,created_at'
+
+  /* 云数据库的裸 REST 端点（不涉及登录，用应用标识鉴权）。
+     接口说明弹窗里的示例全部由它拼出来，避免文档和实际接口写岔。 */
+  const REST_BASE = String(CFG.endpoint || '').replace(/\/+$/, '') + '/.cloud/database/rest'
+  const API_URL = `${REST_BASE}/documents`
+
+  const MSG_FIELDS = 'id,author,body,created_at'
+  const MSG_MAX = 2000
+  const AUTHOR_KEY = 'iv_msg_author'
 
   const TYPES = [
     { key: 'all', label: '全部' },
@@ -39,6 +49,9 @@
     mainView: $('#main-view'),
 
     btnRefresh: $('#btn-refresh'),
+    btnApi: $('#btn-api'),
+    btnMsg: $('#btn-msg'),
+    msgBadge: $('#msg-badge'),
 
     inboxBar: $('#inbox-bar'),
     inboxCount: $('#inbox-count'),
@@ -83,6 +96,20 @@
     tagCancel: $('#tag-cancel'),
     tagClose: $('#tag-close'),
 
+    apiModal: $('#api-modal'),
+    apiBody: $('#api-body'),
+    apiClose: $('#api-close'),
+    apiOk: $('#api-ok'),
+    apiCopy: $('#api-copy'),
+
+    msgModal: $('#msg-modal'),
+    msgList: $('#msg-list'),
+    msgBody: $('#msg-body'),
+    msgAuthor: $('#msg-author'),
+    msgSend: $('#msg-send'),
+    msgMsg: $('#msg-msg'),
+    msgClose: $('#msg-close'),
+
     toast: $('#toast')
   }
 
@@ -90,6 +117,8 @@
   let cloud = null
   let docs = []
   let inbox = []
+  let messages = []
+  let msgLoading = false
   let editing = null
   let tagEditing = null      // 正在编辑标签的内容
   let tagDraft = []          // 标签弹窗里的草稿（改完点保存才落库）
@@ -154,12 +183,14 @@
   /** 把云端错误翻译成人话 */
   function friendly(err) {
     if (!err) return '操作失败'
-    const code = err.code || ''
+    const code = String(err.code || '')
     const msg = err.message || String(err)
-    if (code === '42501') return '没有写入权限：云端权限策略可能未生效'
-    if (code === '42P01') return '数据表不存在，需要在云端先建表'
-    if (code === '23505') return '这个内容已经存在了'
-    if (code === 'PGRST116') return '找不到这条内容'
+    const has = (c) => code.includes(c)
+    if (has('42501')) return '没有写入权限：云端权限策略可能未生效'
+    if (has('42P01')) return '数据表不存在，需要在云端先建表'
+    if (has('23505')) return '这个内容已经存在了'
+    if (has('23514')) return '内容不符合要求：不能为空，也不能超过字数上限'
+    if (has('PGRST116')) return '找不到这条内容'
     if (/Failed to fetch|NetworkError|network/i.test(msg)) return '网络不通，请检查连接后重试'
     return msg
   }
@@ -818,6 +849,211 @@
     }
   }
 
+  /* ═══════════════ 留言板 ═══════════════
+     站点公开，谁都能留；数据存在云数据库 messages 表。 */
+
+  function updateMsgBadge() {
+    const n = messages.length
+    el.msgBadge.textContent = n > 99 ? '99+' : String(n)
+    el.msgBadge.classList.toggle('is-hidden', n === 0)
+  }
+
+  async function loadMessages(silent) {
+    if (msgLoading) return
+    msgLoading = true
+    try {
+      const res = await cloud.database.from('messages').select(MSG_FIELDS)
+        .order('created_at', { ascending: false }).limit(200)
+      if (res.error) throw res.error
+      messages = Array.isArray(res.data) ? res.data : []
+      updateMsgBadge()
+      if (!el.msgModal.classList.contains('is-hidden')) renderMessages()
+    } catch (err) {
+      if (!silent) modalNote(el.msgMsg, friendly(err), 'error')
+    } finally {
+      msgLoading = false
+    }
+  }
+
+  function renderMessages() {
+    if (!messages.length) {
+      el.msgList.innerHTML = '<p class="msg-empty">还没有留言，说第一句吧。</p>'
+      return
+    }
+    el.msgList.innerHTML = messages.map((m) => `
+      <article class="msg-item" data-id="${escapeHtml(m.id)}">
+        <div class="msg-meta">
+          <strong>${escapeHtml(m.author || '匿名')}</strong>
+          <span class="msg-time">${escapeHtml(fmtTime(m.created_at))}</span>
+          <button type="button" class="msg-del" data-msgdel="${escapeHtml(m.id)}" title="删除这条留言" aria-label="删除这条留言">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <p class="msg-text">${escapeHtml(m.body)}</p>
+      </article>`).join('')
+  }
+
+  function openMsgBoard() {
+    el.msgModal.classList.remove('is-hidden')
+    el.msgAuthor.value = localStorage.getItem(AUTHOR_KEY) || ''
+    modalNote(el.msgMsg, '')
+    renderMessages()
+    loadMessages()
+    setTimeout(() => el.msgBody.focus(), 80)
+  }
+
+  function closeMsgBoard() {
+    el.msgModal.classList.add('is-hidden')
+    modalNote(el.msgMsg, '')
+  }
+
+  async function sendMessage() {
+    const body = el.msgBody.value.trim()
+    if (!body) {
+      modalNote(el.msgMsg, '还没写内容', 'error')
+      el.msgBody.focus()
+      return
+    }
+    if (body.length > MSG_MAX) {
+      modalNote(el.msgMsg, `最多 ${MSG_MAX} 字`, 'error')
+      return
+    }
+
+    const author = el.msgAuthor.value.trim()
+    try { localStorage.setItem(AUTHOR_KEY, author) } catch (_) { /* 隐私模式忽略 */ }
+
+    el.msgSend.disabled = true
+    el.msgSend.textContent = '发送中…'
+    try {
+      const res = await cloud.database.from('messages')
+        .insert({ author: author || '匿名', body })
+        .select(MSG_FIELDS)
+      if (res.error) throw res.error
+      const row = Array.isArray(res.data) && res.data[0]
+        ? res.data[0]
+        : { id: `local-${Date.now()}`, author: author || '匿名', body, created_at: new Date().toISOString() }
+      messages.unshift(row)
+      el.msgBody.value = ''
+      updateMsgBadge()
+      renderMessages()
+      modalNote(el.msgMsg, '已发出', 'ok')
+    } catch (err) {
+      modalNote(el.msgMsg, friendly(err), 'error')
+    } finally {
+      el.msgSend.disabled = false
+      el.msgSend.textContent = '发送'
+    }
+  }
+
+  async function deleteMessage(id) {
+    const m = messages.find((x) => String(x.id) === String(id))
+    if (!m) return
+    if (!window.confirm(`删除这条留言？\n\n${String(m.body).slice(0, 60)}`)) return
+    try {
+      const res = await cloud.database.from('messages').delete().eq('id', m.id).select('id')
+      if (res.error) throw res.error
+      messages = messages.filter((x) => String(x.id) !== String(id))
+      updateMsgBadge()
+      renderMessages()
+      toast('留言已删除', 'ok')
+    } catch (err) {
+      modalNote(el.msgMsg, friendly(err), 'error')
+    }
+  }
+
+  /* ═══════════════ 推送数据开放接口说明 ═══════════════
+     文档里的端点、密钥、示例全部由真实配置拼出来，只写实测可用的用法。 */
+
+  const API_FIELDS = [
+    ['title', '必填', '标题，显示在卡片上'],
+    ['content', '必填', 'HTML 源码全文'],
+    ['summary', '选填', '一句话摘要，卡片上展示'],
+    ['doc_type', '选填', 'report / dashboard / tool / page / other'],
+    ['source', '选填', '来源标记，例如自己的脚本名'],
+    ['file_size', '选填', '内容字节数'],
+    ['tags', '选填', '建议留空 [] —— 标签在页面上手工维护']
+  ]
+
+  function openApiDoc() {
+    renderApiDoc()
+    el.apiModal.classList.remove('is-hidden')
+  }
+
+  function closeApiDoc() {
+    el.apiModal.classList.add('is-hidden')
+  }
+
+  function renderApiDoc() {
+    const key = CFG.publishableKey || '(缺少 publishableKey)'
+    const k = escapeHtml(key)
+    const url = escapeHtml(API_URL)
+    const rest = escapeHtml(REST_BASE)
+    const sample = escapeHtml(JSON.stringify({
+      title: '美股盘前快报 · 9月19日',
+      summary: '隔夜三大指数收涨',
+      doc_type: 'report',
+      source: 'my-script',
+      content: '<!DOCTYPE html><html>…</html>'
+    }))
+    el.apiBody.innerHTML = `
+      <p class="api-lead">任何能发 HTTP 请求的地方都能往这里推内容 —— 不需要账号，推完立刻出现在页面上。</p>
+
+      <h4 class="api-h">端点</h4>
+      <pre class="api-code">POST ${url}</pre>
+
+      <h4 class="api-h">请求头</h4>
+      <pre class="api-code">x-wb-webapp-access-key: ${k}
+content-type: application/json
+Prefer: return=representation</pre>
+
+      <h4 class="api-h">字段</h4>
+      <div class="api-fields">${API_FIELDS.map(([n, req, desc]) =>
+        `<div class="api-field"><code>${n}</code><span class="api-req${req === '必填' ? ' is-need' : ''}">${req}</span><span class="api-desc">${desc}</span></div>`
+      ).join('')}</div>
+
+      <h4 class="api-h">推送一条内容</h4>
+      <pre class="api-code">curl -X POST '${url}' \\
+  -H 'x-wb-webapp-access-key: ${k}' \\
+  -H 'content-type: application/json' \\
+  -H 'Prefer: return=representation' \\
+  -d '${sample}'</pre>
+
+      <h4 class="api-h">读取</h4>
+      <pre class="api-code"># 列表（不带正文，返回快）
+GET ${rest}/documents?select=id,title,tags&order=created_at.desc
+
+# 单条正文
+GET ${rest}/documents?select=content&id=eq.1</pre>
+
+      <h4 class="api-h">删除</h4>
+      <pre class="api-code">DELETE ${rest}/documents?id=eq.1</pre>
+
+      <h4 class="api-h">说明</h4>
+      <ul class="api-notes">
+        <li>把路径里的 <code>documents</code> 换成 <code>messages</code> 就是留言表，用法完全一样。</li>
+        <li>失败时响应体里有 <code>code</code> 与 <code>message</code>，照它排查即可。</li>
+        <li>建议单条内容控制在 2MB 以内 —— 页面入库时按同一上限校验。</li>
+        <li>仓库里的 <code>tools/push.mjs</code> 走的就是这个接口。</li>
+        <li><strong>这个密钥是公开的</strong>：它随页面发给了每个访客，所以把站点地址给谁，就等于允许谁写入。</li>
+      </ul>`
+  }
+
+  async function copyApiUrl() {
+    try {
+      await navigator.clipboard.writeText(API_URL)
+      toast('接口地址已复制', 'ok')
+    } catch (_) {
+      // 非安全上下文或权限被拒时退回手选
+      const ta = document.createElement('textarea')
+      ta.value = API_URL
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy'); toast('接口地址已复制', 'ok') }
+      catch (e) { toast('复制失败，请手动选中', 'err') }
+      ta.remove()
+    }
+  }
+
   /* ═══════════════ 事件绑定 ═══════════════ */
 
   function bindEvents() {
@@ -826,6 +1062,26 @@
       renderDocs()
     })
     el.btnRefresh.addEventListener('click', () => loadDocs(true))
+
+    // 顶栏：接口说明 / 留言
+    el.btnApi.addEventListener('click', openApiDoc)
+    el.apiClose.addEventListener('click', closeApiDoc)
+    el.apiOk.addEventListener('click', closeApiDoc)
+    el.apiCopy.addEventListener('click', copyApiUrl)
+
+    el.btnMsg.addEventListener('click', openMsgBoard)
+    el.msgClose.addEventListener('click', closeMsgBoard)
+    el.msgSend.addEventListener('click', sendMessage)
+    el.msgBody.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        sendMessage()
+      }
+    })
+    el.msgList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-msgdel]')
+      if (btn) deleteMessage(btn.dataset.msgdel)
+    })
 
     el.typeChips.addEventListener('click', (e) => {
       const fav = e.target.closest('[data-fav]')
@@ -929,6 +1185,8 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return
+      if (!el.apiModal.classList.contains('is-hidden')) return closeApiDoc()
+      if (!el.msgModal.classList.contains('is-hidden')) return closeMsgBoard()
       if (!el.tagModal.classList.contains('is-hidden')) return closeTagEditor()
       if (!el.editModal.classList.contains('is-hidden')) {
         el.editModal.classList.add('is-hidden')
@@ -947,12 +1205,15 @@
       renderDocs()
     })
 
-    ;[el.editModal, el.tagModal].forEach((modal) => {
+    // 点遮罩关闭（留言板刻意不关：正打字时误触很烦）
+    const closers = new Map([
+      [el.editModal, () => { el.editModal.classList.add('is-hidden'); editing = null }],
+      [el.tagModal, closeTagEditor],
+      [el.apiModal, closeApiDoc]
+    ])
+    closers.forEach((close, modal) => {
       modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-          if (modal === el.tagModal) closeTagEditor()
-          else { modal.classList.add('is-hidden'); editing = null }
-        }
+        if (e.target === modal) close()
       })
     })
   }
@@ -975,6 +1236,7 @@
     el.mainView.classList.remove('is-hidden')
     loadDocs()
     loadInbox()
+    loadMessages(true)
   }
 
   if (document.readyState === 'loading') {

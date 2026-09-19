@@ -5,8 +5,10 @@
  * 云端信息库 · 本地自检
  *
  * 用法： node tools/selfcheck.mjs [--base http://127.0.0.1:3000]
- * 覆盖：静态资源、健康检查、收件箱增删查、鉴权与路径穿越防护。
- * 其中「标签由人工维护」一项会读本地 tools/push.mjs，用来守住「推送不写标签」这条规则。
+ * 覆盖：静态资源、顶栏入口（接口说明 / 留言板）、健康检查、
+ *       收件箱增删查、鉴权与路径穿越防护。
+ * 其中「标签由人工维护」一项会读本地 tools/push.mjs，用来守住「推送不写标签」这条规则；
+ * 「开放接口」一组只在非 localhost 的地址上执行（/.cloud 路径由平台网关照管）。
  */
 
 import fs from 'node:fs'
@@ -130,6 +132,40 @@ async function main() {
     assert(!js.includes('el.search'), 'app.js 仍在读取搜索框')
   })
 
+  await check('接口说明用真实端点，不写死', async () => {
+    const html = await (await fetch(`${BASE}/`)).text()
+    assert(html.includes('id="api-modal"'), '缺少接口说明弹窗')
+    assert(html.includes('id="api-body"'), '接口说明缺少内容容器')
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    assert(js.includes('openApiDoc'), '缺少接口说明逻辑')
+    assert(js.includes("'/.cloud/database/rest'"), '未从配置拼出 REST 端点')
+    // 文档里的端点必须由 CFG.endpoint 推导，不能写死某个域名
+    const a = js.indexOf('function renderApiDoc')
+    const b = js.indexOf('async function copyApiUrl')
+    assert(a > 0 && b > a, '找不到 renderApiDoc 片段')
+    const doc = js.slice(a, b)
+    assert(!/https?:\/\//.test(doc), '接口说明里写死了域名，应由配置推导')
+    assert(doc.includes('x-wb-webapp-access-key'), '接口说明缺少鉴权头')
+    assert(doc.includes('title') && doc.includes('content'), '接口说明缺少字段清单')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(css.includes('.api-code'), '缺少接口说明的代码块样式')
+  })
+
+  await check('留言功能已就位', async () => {
+    const html = await (await fetch(`${BASE}/`)).text()
+    assert(html.includes('id="msg-modal"'), '缺少留言弹窗')
+    assert(html.includes('id="msg-body"'), '缺少留言输入框')
+    assert(html.includes('id="msg-list"'), '缺少留言列表')
+    assert(html.includes('id="msg-badge"'), '顶栏缺少留言条数角标')
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    assert(js.includes('openMsgBoard'), '缺少留言板逻辑')
+    assert(js.includes("from('messages')"), '留言未接云数据库 messages 表')
+    assert(js.includes('sendMessage') && js.includes('deleteMessage'), '缺少留言的发布/删除')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(css.includes('.msg-item'), '缺少留言条目样式')
+    assert(css.includes('.msg-compose'), '缺少留言输入区样式')
+  })
+
   console.log('\n健康检查')
   await check('GET /api/health', async () => {
     const res = await fetch(`${BASE}/api/health`)
@@ -216,6 +252,36 @@ async function main() {
     const res = await fetch(`${BASE}/api/inbox/${createdId}`, { headers: { 'x-ingest-key': KEY } })
     assert(res.status === 404, `期望 404，实际 ${res.status}`)
   })
+
+  console.log('\n开放接口')
+  const configJs = await (await fetch(`${BASE}/config.js`)).text()
+  const pk = (configJs.match(/publishableKey:\s*'([^']+)'/) || [])[1]
+  if (/127\.0\.0\.1|localhost/.test(BASE)) {
+    console.log('  – 跳过：/.cloud 由平台网关照管，本地服务没有这个路径（跑线上地址时会执行）')
+  } else {
+    await check('REST 端点可匿名读写 messages', async () => {
+      assert(pk, 'config.js 里读不到 publishableKey')
+      const H = { 'x-wb-webapp-access-key': pk, 'content-type': 'application/json' }
+      const url = `${BASE}/.cloud/database/rest/messages`
+      const ins = await fetch(url, {
+        method: 'POST',
+        headers: { ...H, Prefer: 'return=representation' },
+        body: JSON.stringify({ author: '自检', body: 'selfcheck probe' })
+      })
+      assert(ins.status === 201, `写入期望 201，实际 ${ins.status}`)
+      const row = (await ins.json())[0]
+      assert(row && row.id, '写入未返回新行')
+      const del = await fetch(`${url}?id=eq.${row.id}`, { method: 'DELETE', headers: H })
+      assert(del.status === 204, `删除期望 204，实际 ${del.status}`)
+      const back = await fetch(`${url}?select=id&id=eq.${row.id}`, { headers: H })
+      assert((await back.json()).length === 0, '删除后仍能读到，清理不干净')
+    })
+
+    await check('REST 无密钥访问被拒绝 (401)', async () => {
+      const res = await fetch(`${BASE}/.cloud/database/rest/messages?select=id&limit=1`)
+      assert(res.status === 401, `期望 401，实际 ${res.status}`)
+    })
+  }
 
   console.log('\n安全')
   await check('路径穿越被挡住', async () => {

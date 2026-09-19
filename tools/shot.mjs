@@ -12,6 +12,7 @@
  *   node tools/shot.mjs --out shot.png [--url http://127.0.0.1:3000/]
  *                       [--w 1280] [--h 800] [--scale 1]
  *                       [--script "document.querySelector('.card').click()"]
+ *                       [--script-file tools/probe.js]   ← 脚本较长时用这个，免去 shell 引号地狱
  *                       [--wait 4000] [--full]
  */
 
@@ -35,7 +36,8 @@ const W = Number(arg('w', 1280))
 const H = Number(arg('h', 820))
 const SCALE = Number(arg('scale', 1))
 const WAIT = Number(arg('wait', 4000))
-const SCRIPT = arg('script', '')
+const SCRIPT_FILE = arg('script-file', '')
+const SCRIPT = SCRIPT_FILE ? fs.readFileSync(SCRIPT_FILE, 'utf8') : arg('script', '')
 const FULL = flag('full')
 const PORT = Number(arg('port', 9333))
 

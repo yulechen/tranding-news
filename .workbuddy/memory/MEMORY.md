@@ -43,6 +43,31 @@
   曾因机器自动打标签，4 条内容攒出 21 个标签、19 个只用过一次，标签区被撑乱。
   **归档只给标题 / 摘要 / 类型。**
 
+## 数据表
+- `documents`：内容归档。正文直存 `content`；列表查询不带 `content`
+- `messages`：留言板（2026-09-19 新增）。字段 `id / author / body / created_at`，
+  带 CHECK（body 非空且 ≤2000 字、author ≤40 字）；RLS 四条策略同样全放开
+
+## 开放接口（裸 REST，实测可用）
+- 路径：`{endpoint}/.cloud/database/rest/<表名>`，例如
+  `https://info-vault.app.workbuddy.host/.cloud/database/rest/documents`
+- 鉴权头：**`x-wb-webapp-access-key: <publishableKey>`** —— 注意不是 `apikey` 也不是 `Bearer`。
+  这是拦一次真实 SDK 请求才拿到的（SDK 里是拼字符串，搜不到字面量），别凭记忆写
+- 实测：GET 列表 200；POST 写入 201 —— **必须带 `Prefer: return=representation` 才会回传新行**；
+  DELETE 204；不带密钥 401 `invalid_client`
+- 页面上的「接口」按钮（`#api-modal`）就是这份文档，端点与示例全部由 `CFG.endpoint` 拼出，
+  **不写死域名**；自检里有断言切出 `renderApiDoc` 片段检查其中不含 `http://` / `https://`
+- 🔑 云端错误码是**带前缀**的（如 `DATABASE_23514`），前端 `friendly()` 的判断要用
+  `includes` 而不是 `===`，否则错误翻译整块失效
+
+## 前端顶栏（2026-09-19 起）
+- 只有三个按钮：**接口**（`#btn-api` → 开放接口说明弹窗）、
+  **留言**（`#btn-msg`，带条数角标 `#msg-badge` → 留言板弹窗）、**刷新**
+- 窄屏（≤680px）下按钮文字隐藏只留图标；角标保留，否则认不出哪个是留言
+- 留言弹窗 `#msg-modal`：上半输入区（署名存 localStorage `iv_msg_author`、
+  Ctrl/⌘+Enter 发送），下半倒序列表（`#msg-list`，可删）；删除前 confirm
+- 🚫 留言板的**遮罩点击刻意不关闭**（打字时误触太烦），只认关闭按钮与 Esc
+
 ## 标签的维护方式
 - 标签**由用户手工维护**，这是系统里唯一的组织方式（用户 2026-09-19 要求去掉搜索与上传入口）。
 - 最主要的入口是**每张卡片右上角的标签按钮**（`data-tagedit`，在星标左侧），点开 `#tag-modal`：
@@ -63,9 +88,15 @@
 - 🚫 **页面刻意不提供上传入口与搜索**（用户 2026-09-19 要求）：内容只从 WorkBuddy 推过来，查找全靠标签。
   自检里有「页面不含上传入口与搜索」一项守着，别再手痒加回去。
 - 本机 bash 没有 coreutils，脚本一律用 node 写，不要用 ls/dirname/cat
-- 每次改完代码跑 `node tools/selfcheck.mjs [--base <url>]`，23 项要全绿
+- 每次改完代码跑 `node tools/selfcheck.mjs [--base <url>]`，**25 项**要全绿
+  （「开放接口」那组只在非 localhost 地址上执行，本地会打印跳过原因）
 - **UI 改动必须实际截图看过再交付**：`node tools/shot.mjs --out x.png --script "<JS>"`，
-  用本机 Chrome 的 CDP 无头模式，能执行一段 JS 后再截图（拍交互后的状态），零安装零依赖
+  用本机 Chrome 的 CDP 无头模式，能执行一段 JS 后再截图（拍交互后的状态），零安装零依赖。
+  脚本一长就会被 shell 引号咬，改用 **`--script-file <路径>`** 从文件读
+- ⚠️ **窄屏弹窗量宽度要直接量卡片**：`.modal` 是 grid + 隐式 auto 轨道，
+  `pre` 里的长行会把轨道顶宽到视口之外（实测 500px 视口里卡片被撑成 979px），
+  而 `document.scrollWidth` 因为 fixed 定位 + overflow:auto **报不出来**。
+  移动端媒体查询里已加 `grid-template-columns: minmax(0, 1fr)` 固定单列满宽
 
 ## 常用命令
 - 本地起服务：`node server.js`（默认 3000）
@@ -73,10 +104,12 @@
   （`--tags` 参数还在但被忽略，只为兼容旧脚本）
 - 推送内容（暂存收件箱）：加 `--inbox`
 - 自检线上：`node tools/selfcheck.mjs --base https://info-vault.app.workbuddy.host`
-- 页面截图：`node tools/shot.mjs --out shot.png [--url ...] [--script "..."]`
+- 页面截图：`node tools/shot.mjs --out shot.png [--url ...] [--script "..."] [--script-file 文件]`
 - 图标光栅化：`node tools/make-icons.mjs`
 
 ## 前端功能点（避免重复实现）
 - 收藏：工具条首个 chip（`data-fav`）切换只看收藏；状态存 DB `documents.starred`；
   深链 `#fav`；预览页顶栏也有收藏按钮；卡片 `is-starred` 有琥珀色顶条
 - 筛选都是前端本地过滤（一次拉最多 500 条列表，不带 `content`）
+- 顶栏另有：接口说明弹窗（`#api-modal` / `renderApiDoc`）、留言板（`#msg-modal` / `openMsgBoard`）
+- 留言不参与标签与筛选体系，是独立的一张表、独立的一个弹窗

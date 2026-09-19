@@ -3,7 +3,26 @@
 ## 关键标识
 - 云应用 appId：`wbapp_nYUBg7YCbzNbEX9V2pDJ4d` —— **发布时必须复用这个 id**，换新 id 会导致域名变、云登录 Origin 校验失败
 - 线上地址 / 云数据面 endpoint：`https://info-vault.app.workbuddy.host`
-- 收件箱写入密钥 `INGEST_KEY`：同时写在 `server.js` 与 `tools/push.mjs`，改一处必须改另一处
+- 收件箱写入密钥 `INGEST_KEY`：出现在 **4 处**，改一处必须全改 ——
+  `server.js` 与 `tools/push.mjs`、`tools/selfcheck.mjs` 里的 `process.env.INGEST_KEY || '...'` 兜底，
+  以及 `public/app.js` 第 11 行**内联明文**（收件箱条鉴权用）。
+  ⚠️ 因为是内联在浏览器端，这个密钥**本来就是公开的**，别把它当机密。
+
+## 代码仓库（GitHub）
+- 远端：`https://github.com/yulechen/tranding-news`（**PUBLIC**），分支 `main`，远端地址名 `origin`
+- 身份只配在 **repo 局部**（`yulechen` / `3973126+yulechen@users.noreply.github.com`），不动全局配置
+- `core.autocrlf` 全局为 `true`，本仓库**局部设为 `false`**（源文件均为 LF）
+- 🚫 **`.gitignore` 里临时文件规则必须写 `.tmp-*`**，写成 `.tmp-*/` 带尾斜杠只匹配目录，
+  会让临时文件被 `git add -A` 一起提交（已踩过一次）
+- 验证忽略规则用 `git check-ignore -v --no-index <path>`；**不加 `--no-index` 时，
+  已跟踪文件一律报「未忽略」**，会误判规则失效
+- ⚠️ **沙箱下 `git fetch` 写不进 `refs/remotes/origin/main`**：`fetch` 会打印
+  `[new branch] main -> origin/main`，但本地其实没落盘，表现为 `status -sb` 显示 `[gone]`、
+  `rev-parse origin/main` 解析失败。**这不是远端问题** —— 判据是 `git ls-remote origin`。
+  修法：用 node 直接 `.git/refs/remotes/origin/main` 写入 sha 后即恢复正常。
+  **远端状态永远以 `git ls-remote` / `gh api` 为准。**
+- 排除项：`design/preview/*.png`（可由 `tools/shot.mjs` / `make-icons.mjs` 重新生成）、
+  `inbox/*`（保留 `.gitkeep`）、`.tmp-*`、`node_modules/`
 
 ## 架构约定
 - 前端是纯静态、无构建步骤：云 SDK 走自托管 `public/vendor/workbuddy-cloud-sdk.js`（不用 CDN，避免国内加载不稳）

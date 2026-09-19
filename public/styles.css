@@ -203,29 +203,6 @@ button { cursor: pointer; }
   color: var(--accent);
 }
 
-.select-wrap { position: relative; display: inline-block; }
-.select-wrap::after {
-  content: "";
-  position: absolute; right: 12px; top: 50%;
-  width: 7px; height: 7px;
-  border-right: 1.8px solid var(--ink-3);
-  border-bottom: 1.8px solid var(--ink-3);
-  transform: translateY(-70%) rotate(45deg);
-  pointer-events: none;
-}
-.select-wrap select {
-  appearance: none;
-  height: 34px;
-  padding: 0 32px 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font-size: 13px;
-  color: var(--ink-2);
-  outline: none;
-}
-.select-wrap select:focus { border-color: var(--accent); }
-
 /* ═══════════ 启动屏 ═══════════ */
 
 .boot {
@@ -375,36 +352,6 @@ button { cursor: pointer; }
   font-weight: 600;
   letter-spacing: .02em;
 }
-
-.search {
-  flex: 1;
-  max-width: 420px;
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.search svg {
-  position: absolute; left: 12px;
-  width: 16px; height: 16px;
-  color: var(--ink-3);
-  pointer-events: none;
-}
-.search input {
-  width: 100%;
-  height: 36px;
-  padding: 0 14px 0 35px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-2);
-  outline: none;
-  transition: border-color .16s var(--ease), box-shadow .16s var(--ease), background .16s;
-}
-.search input:focus {
-  background: var(--surface);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3.5px rgba(79, 70, 229, .12);
-}
-.search input::-webkit-search-cancel-button { cursor: pointer; }
 
 .topbar-actions {
   margin-left: auto;
@@ -1187,7 +1134,6 @@ button { cursor: pointer; }
 
 @media (max-width: 860px) {
   .brand-name { display: none; }
-  .search { max-width: none; }
 }
 
 @media (max-width: 680px) {
@@ -1197,16 +1143,10 @@ button { cursor: pointer; }
   .topbar-actions .btn span { display: none; }
   .topbar-actions .btn { padding: 0 11px; }
 
-  .search { position: static; }
-  .search input { height: 34px; font-size: 13.5px; }
-
-  .search { position: static; }
-  .search input { height: 34px; font-size: 13.5px; }
-
   .content { padding: 16px 13px 70px; }
 
   .toolbar { flex-wrap: wrap; gap: 10px; }
-  .toolbar-right { margin-left: 0; width: 100%; justify-content: space-between; }
+  .toolbar-right { margin-left: 0; width: 100%; justify-content: flex-end; }
 
   .chips {
     flex-wrap: nowrap;

@@ -132,6 +132,19 @@ async function main() {
     assert(!js.includes('el.search'), 'app.js 仍在读取搜索框')
   })
 
+  await check('固定最新优先，无排序控件', async () => {
+    // 排序只保留一种：按时间倒序（最新优先）。工具栏不再提供切换入口。
+    const html = await (await fetch(`${BASE}/`)).text()
+    assert(!html.includes('id="sort"'), '仍存在排序下拉')
+    assert(!html.includes('select-wrap'), '仍存在排序下拉外壳')
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    assert(!js.includes('view.sort'), 'app.js 仍保留排序状态')
+    assert(!js.includes("sort: 'new'"), 'app.js 状态里仍留着排序字段')
+    assert(js.includes('byDate(b) - byDate(a)'), 'app.js 未按最新优先排序')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(!css.includes('.select-wrap'), '样式里仍留着排序下拉样式')
+  })
+
   await check('接口说明用真实端点，不写死', async () => {
     const html = await (await fetch(`${BASE}/`)).text()
     assert(html.includes('id="api-modal"'), '缺少接口说明弹窗')

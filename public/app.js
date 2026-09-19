@@ -61,7 +61,6 @@
 
     typeChips: $('#type-chips'),
     statText: $('#stat-text'),
-    sort: $('#sort'),
     tagRow: $('#tag-row'),
     grid: $('#doc-grid'),
     empty: $('#empty'),
@@ -126,7 +125,7 @@
   let currentHtml = ''
   let loading = false
 
-  const view = { type: 'all', tag: '', sort: 'new', starred: false }
+  const view = { type: 'all', tag: '', starred: false }
 
   /* ── 通用工具 ─────────────────────────────────────────── */
 
@@ -299,14 +298,9 @@
     if (view.tag) list = list.filter((d) => Array.isArray(d.tags) && d.tags.includes(view.tag))
     if (view.starred) list = list.filter((d) => !!d.starred)
 
+    // 固定排序：最新优先（不再提供排序切换）
     const byDate = (d) => new Date(d.created_at).getTime() || 0
-    if (view.sort === 'new') list.sort((a, b) => byDate(b) - byDate(a))
-    else if (view.sort === 'old') list.sort((a, b) => byDate(a) - byDate(b))
-    else if (view.sort === 'title') {
-      list.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'zh'))
-    } else if (view.sort === 'size') {
-      list.sort((a, b) => Number(b.file_size || 0) - Number(a.file_size || 0))
-    }
+    list.sort((a, b) => byDate(b) - byDate(a))
 
     // 星标置顶
     list.sort((a, b) => Number(!!b.starred) - Number(!!a.starred))
@@ -1057,10 +1051,6 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
   /* ═══════════════ 事件绑定 ═══════════════ */
 
   function bindEvents() {
-    el.sort.addEventListener('change', () => {
-      view.sort = el.sort.value
-      renderDocs()
-    })
     el.btnRefresh.addEventListener('click', () => loadDocs(true))
 
     // 顶栏：接口说明 / 留言

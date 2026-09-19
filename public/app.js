@@ -446,14 +446,17 @@
     const starChip =
       `<button type="button" class="chip chip-star${view.starred ? ' is-active' : ''}" data-fav="1" title="只看收藏" aria-pressed="${view.starred}">` +
       starSvg(view.starred) +
-      `<span>收藏</span><span class="chip-n">${starredN}</span></button>` +
-      `<span class="chip-sep" aria-hidden="true"></span>`
+      `<span>收藏</span><span class="chip-n">${starredN}</span></button>`
 
-    el.typeChips.innerHTML = starChip + TYPES.map((t) => {
+    // 类型筛选收进一个分段控件：比一排散落的胶囊安静，选中态也更明确
+    const segs = TYPES.map((t) => {
       const n = counts[t.key] || 0
       if (t.key !== 'all' && n === 0) return ''
-      return `<button type="button" class="chip${view.type === t.key ? ' is-active' : ''}" data-type="${t.key}" aria-pressed="${view.type === t.key}">${t.label}<span class="chip-n">${n}</span></button>`
+      return `<button type="button" class="seg${view.type === t.key ? ' is-active' : ''}" data-type="${t.key}" aria-pressed="${view.type === t.key}">${t.label}<span class="seg-n">${n}</span></button>`
     }).join('')
+
+    el.typeChips.innerHTML =
+      starChip + `<div class="segmented" role="group" aria-label="按内容类型筛选">${segs}</div>`
 
     const tags = tagCounts(afterType).slice(0, 24)
     // 选中的标签即使被类型筛成 0 条也要留着，否则用户看不到自己正卡在哪个筛选上
@@ -516,7 +519,7 @@
       const delay = Math.min(i, 12) * 24
       const hasTags = (d.tags || []).length > 0
       const title = escapeHtml(d.title || '未命名')
-      return `<article class="card${d.starred ? ' is-starred' : ''}" data-id="${d.id}" style="animation-delay:${delay}ms">
+      return `<article class="card${d.starred ? ' is-starred' : ''}" data-id="${d.id}" data-type="${type}" style="animation-delay:${delay}ms">
         <div class="card-top">
           <span class="type-badge" data-type="${type}">${TYPE_LABEL[type]}</span>
           <div class="card-actions">

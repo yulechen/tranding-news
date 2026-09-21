@@ -75,15 +75,15 @@
   分流（`DOC_ROUTE` / `renderDocPage` / `leaveDoc` / `docUrl`）。
   ⚠️⚠️ 所以 **index.html 里的静态资源必须写绝对路径**（`/styles.css` `/app.js` …）——
   写成 `./styles.css` 在 `/doc/55` 下会解析成 `/doc/styles.css` 直接 404（自检反向守着）
-- 详情页**没有任何横条**（顶栏底栏都没有），iframe 铺满整屏、列表整块 `display:none`，
-  退出只认「×」+ Esc（打开时焦点落在它上面）：从列表点进来的 `history.back()`（筛选还在），
-  直接打开地址的回 `/`（判据：`document.referrer` 同源）
-- 🚫 已删：`openPreview()`（页内浮层）与 `windowShell()`（blob 占位窗）—— 别当"丢了"补回来
-  - **关闭钮：底部正中 + 裸「×」**（2026-09-21 用户连改两轮：右上角 → 顶部正中 → 底部正中，再去掉圆形底盘）
-    `position:absolute; bottom:var(--sp-3); left:50%; margin-left:-19px`；`border:0` + `background:none` +
-    无 `border-radius` / `box-shadow`；图标 22px（≤680 收到 20px、盒子 34px）
-    🚫 居中别写 `transform:translateX(-50%)` —— 会被 hover 的 `scale` 覆盖，只有 `margin-left` 稳
-  - 焦点环另给 `.preview-close:focus-visible { border-radius: var(--r-sm) }`（只剩「×」后方框环太突兀）
+- 详情页**没有任何横条、也没有任何退出控件**（2026-09-21 用户要求：顶栏 → 底栏 → 全去掉；
+  关闭钮也走完 右上角圆钮 → 顶部正中 → 底部正中裸「×」→ **彻底删掉**）。
+  iframe 铺满整屏、列表整块 `display:none`；退出只认 **Esc / 浏览器后退**：
+  从列表点进来的 `history.back()`（筛选还在），直接打开地址的回 `/`（判据：`document.referrer` 同源）
+- 🚫 已删：`openPreview()`（页内浮层）、`windowShell()`（blob 占位窗）、`#preview-close` 整个按钮
+  （DOM + `el.previewClose` + 点击绑定 + 全部 `.preview-close` 样式）—— 别当"丢了"补回来
+  - 替代的焦点落点：`#preview` 带 `tabindex="-1"`，脚本 `el.preview.focus()` 把焦点移进去，
+    好让读屏念出「内容详情」；容器不可交互，所以 `#preview:focus { outline: none }` 关掉贴边蓝框
+    （`[tabindex]:focus-visible` 的通用焦点环会画出来，必须显式压掉）
   - `actOnCurrent()` **故意没有 UI 入口但留着**（「下载」「编辑信息」只在这里实现），别当死代码删
 
 ### 分类

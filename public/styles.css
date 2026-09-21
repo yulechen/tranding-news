@@ -693,37 +693,16 @@ button { cursor: pointer; }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* 关闭钮：预览没有顶栏，退出就靠这一颗。
-   悬浮在内容之上（absolute + 脱离流），不挤压预览区域。
-   2026-09-21 二次收敛：用户要求去掉圆形底盘，**只留一个「×」** ——
-   所以这里刻意没有 background / border / border-radius / box-shadow，别再往回加。
-   位置在**页面底部正中**（演变：右上角 → 顶部正中 → 底部正中）——
-   用 margin-left 抵消自身宽度来做居中，不用 transform:translateX，
-   因为 hover 的 scale 会把 translate 覆盖掉 */
-.preview-close {
-  position: absolute;
-  bottom: var(--sp-3);
-  left: 50%;
-  margin-left: -19px;
-  z-index: 3;
-  width: 38px; height: 38px;
-  display: grid; place-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink-2);
-  transition: color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
-}
-/* 视觉 38px 的「×」，热区撑到 48px */
-.preview-close::after { content: ""; position: absolute; inset: -5px; }
-.preview-close:hover { color: var(--ink); transform: scale(1.12); }
-/* 只剩「×」了，焦点环也顺着收成圆角方形 —— 只影响键盘用户（鼠标点击不出现） */
-.preview-close:focus-visible { border-radius: var(--r-sm); outline-offset: 4px; }
-.preview-close svg { width: 22px; height: 22px; }
-
 /* 详情页（/doc/<id>）：这一页唯一的内容就是正文，跳过导航链接没意义，
    还白占一个 Tab 落点，收掉 */
 body.is-doc .skip-link { display: none; }
+
+/* 详情页没有退出按钮（2026-09-21 用户要求）：这是地址栏里的一张真页面，
+   退出交给浏览器自带的后退 / Esc。演变记录：右上角圆钮 → 顶部正中 → 底部正中裸「×」→ 全部去掉，
+   别再往页面上加任何退出控件。
+   焦点会由脚本移到 #preview 上（tabindex="-1"），它是全屏容器、本身不可交互，
+   所以这里关掉焦点环，免得键盘用户看到一圈贴着屏幕边缘的蓝框 */
+#preview:focus { outline: none; }
 
 .preview-body { flex: 1; position: relative; background: #fff; }
 #preview-frame {
@@ -1005,12 +984,6 @@ body.is-doc .skip-link { display: none; }
   .inbox-bar { flex-wrap: wrap; }
   .inbox-actions { width: 100%; }
   .inbox-actions .btn { flex: 1; }
-
-  /* 预览没有顶栏了，只剩一颗悬浮关闭钮：窄屏收小一档，
-     位置仍在页面底部正中（margin-left 是宽度的一半） */
-  .preview-close { width: 34px; height: 34px; bottom: var(--sp-3); margin-left: -17px; }
-  .preview-close::after { inset: -4px; }
-  .preview-close svg { width: 20px; height: 20px; }
 
   /* 栅格轨道固定成一列满宽：否则 pre 里的长行会把卡片顶宽到视口之外 */
   .modal { padding: 0; align-items: flex-end; grid-template-columns: minmax(0, 1fr); }

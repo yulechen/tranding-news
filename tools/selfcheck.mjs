@@ -108,7 +108,7 @@ async function main() {
     const html = await (await fetch(`${BASE}/`)).text()
     // 底栏没有品牌了（2026-09-21），只剩居中按钮组：收藏开关紧跟「接口」左边
     const botbar = barOf(html)
-    assert(html.includes('id="preview-close"'), '预览页缺少退出入口（悬浮关闭钮）')
+    assert(!html.includes('preview-close'), '详情页又长出了关闭钮')
     assert(botbar.includes('id="btn-fav"'), '底栏缺少收藏筛选按钮')
     assert(/id="btn-fav"[^>]*aria-pressed/.test(botbar), '收藏按钮缺少 aria-pressed 状态')
     assert(botbar.indexOf('id="btn-fav"') < botbar.indexOf('id="btn-api"'), '收藏开关没放在「接口」左边')
@@ -397,23 +397,21 @@ async function main() {
     assert(js.includes('title="打开内容（按住 Shift 在新窗口打开）"'), '卡片链接的提示文案没跟着改')
 
     // 预览页刻意不做顶栏（2026-09-20 用户要求）：内容是主角，页面铺满。
-    // 退出只认悬浮关闭钮 + Esc，别把「返回 / 收藏 / 标签 / 新窗口 / 下载 / 编辑信息 / 删除」那一排加回来
+    // 2026-09-21 用户要求：连那颗悬浮「×」也去掉 —— 这已经是地址栏里的真页面了，
+    // 退出交给浏览器自带的后退 / Esc，页面上不该再有任何退出控件。
+    // 演变：右上角圆钮 → 顶部正中 → 底部正中裸「×」→ 全部去掉，别再加回来。
     const css = await (await fetch(`${BASE}/styles.css`)).text()
     assert(!html.includes('preview-bar'), '预览页又长出了顶栏')
     assert(!html.includes('preview-back'), '预览页又长出了「返回」按钮')
-    assert(html.includes('id="preview-close"'), '预览页缺少悬浮关闭钮')
+    assert(!html.includes('preview-close'), '详情页又长出了关闭钮（这版不该有退出控件）')
+    assert(!js.includes('previewClose'), '关闭钮的脚本没删干净')
+    assert(!css.includes('preview-close'), '样式里仍留着关闭钮')
     assert(!css.includes('.preview-bar'), '样式里仍留着预览顶栏')
     assert(!css.includes('.preview-actions'), '样式里仍留着预览顶栏的操作区')
-    assert(/\.preview-close \{[^}]*position: absolute/.test(css), '关闭钮没有脱离文档流（会挤压预览区域）')
-    // 关闭钮在页面底部正中（2026-09-21 用户要求；演变：右上角 → 顶部正中 → 底部正中）
-    assert(/\.preview-close \{[^}]*left: 50%/.test(css), '关闭钮没在页面底部中间')
-    assert(/\.preview-close \{[^}]*bottom: var\(--sp-[23]\)/.test(css), '关闭钮没落在页面底部')
-    assert(!/\.preview-close \{[^}]*top: /.test(css), '关闭钮又回到顶部了')
-    assert(!/\.preview-close \{[^}]*right: /.test(css), '关闭钮又贴回右上角了')
-    // 只留一个「×」（2026-09-21 用户要求）：去掉圆形底盘 —— 无描边 / 圆底 / 阴影
-    assert(!/\.preview-close \{[^}]*border-radius/.test(css), '关闭钮又长出圆形底盘了')
-    assert(/\.preview-close \{[^}]*border: 0/.test(css), '关闭钮又带上描边了')
-    assert(/\.preview-close \{[^}]*background: none/.test(css), '关闭钮又加回底色了')
+    // 焦点依旧有落点：脚本把焦点移进 #preview（tabindex="-1"），读屏能念出这个区域
+    assert(/id="preview"[^>]*tabindex="-1"/.test(html), '详情页容器没留 tabindex（焦点没有落点）')
+    assert(js.includes('el.preview.focus()'), '进详情页时没有把焦点移进来')
+    assert(/#preview:focus \{ outline: none; \}/.test(css), '全屏容器没关掉焦点环（会贴边画一圈蓝框）')
   })
 
   await check('详情页 /doc/<id> 是一张真页面', async () => {
@@ -423,7 +421,8 @@ async function main() {
     assert(res.status === 200, `详情页期望 200，实际 ${res.status}`)
     const body = await res.text()
     assert(body.includes('id="preview-frame"'), '详情页没带着正文容器')
-    assert(body.includes('id="preview-close"'), '详情页缺少退出入口')
+    // 页面上没有退出控件了（2026-09-21 用户要求）：退出靠浏览器后退 / Esc
+    assert(!body.includes('preview-close'), '详情页又长出了关闭钮')
     // /doc/x 下的相对路径会解析成 /doc/styles.css，所以静态资源必须写绝对路径
     assert(body.includes('href="/styles.css"'), '样式表不是绝对路径（详情页会 404）')
     assert(body.includes('src="/app.js"'), 'app.js 不是绝对路径（详情页会 404）')

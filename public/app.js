@@ -72,7 +72,6 @@
 
     preview: $('#preview'),
     previewFrame: $('#preview-frame'),
-    previewClose: $('#preview-close'),
 
     editModal: $('#edit-modal'),
     editTitle: $('#edit-title'),
@@ -594,8 +593,9 @@
     el.preview.classList.remove('is-hidden')
     el.previewFrame.srcdoc = previewShell('正在载入…')
     lockScroll()
-    // 键盘用户进来后焦点落在关闭钮上，看完直接回车就退出去
-    setTimeout(() => el.previewClose.focus(), 40)
+    // 页面上没有退出控件了，所以把焦点移进这一块：读屏能立刻念出「内容详情」，
+    // 键盘用户也不用先穿过整个 iframe 才找到落脚点（Esc / 浏览器后退随时能退）
+    setTimeout(() => el.preview.focus(), 40)
 
     try {
       const doc = await fetchDoc(id)
@@ -610,7 +610,7 @@
   }
 
   /**
-   * 退出详情页 —— 关闭「×」和 Esc 都走这里。
+   * 退出详情页 —— Esc 走这里（页面上已经没有退出按钮了，主要靠浏览器后退）。
    * 详情页是真页面：从列表点进来的就原路退回（筛选还在），
    * 直接打开这个地址、没有站内来路的就回列表首页。
    */
@@ -1179,9 +1179,6 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
 
     el.btnArchiveAll.addEventListener('click', archiveAllInbox)
     el.btnDismissInbox.addEventListener('click', clearInbox)
-
-    // 详情页没有顶栏，只有一颗悬浮关闭钮（Esc 同样能退）
-    el.previewClose.addEventListener('click', leaveDoc)
 
     document.addEventListener('keydown', (e) => {
       // Tab 锁在弹窗内，别让焦点跑到背后的列表上

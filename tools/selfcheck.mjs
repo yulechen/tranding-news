@@ -216,11 +216,12 @@ async function main() {
     assert(/const isRead = \(id\) =>/.test(js), '缺少已读判断')
     // 卡片要带上已读标记
     assert(/isRead\(d\.id\) \? ' is-read'/.test(js), '卡片渲染没用上已读状态')
-    // 两条打开路径（新窗口 / 页内预览）都必须标记已读
-    const newWin = js.slice(js.indexOf('async function openInNewWindow'))
-    assert(/markRead\(doc\.id\)/.test(newWin.slice(0, 500)), '新窗口打开时没标记已读')
-    const preview = js.slice(js.indexOf('async function openPreview'))
-    assert(/markRead\(doc\.id\)/.test(preview.slice(0, 400)), '页内预览时没标记已读')
+    // 三条打开路径（详情页 / 新窗口 / 卡片链接）都必须标记已读
+    const docPage = js.slice(js.indexOf('async function renderDocPage'))
+    assert(/markRead\(id\)/.test(docPage.slice(0, 1500)), '详情页打开时没标记已读')
+    const newWin = js.slice(js.indexOf('function openInNewWindow'))
+    assert(/markRead\(doc\.id\)/.test(newWin.slice(0, 400)), '新窗口打开时没标记已读')
+    assert(/if \(link\) markRead\(link\.dataset\.open\)/.test(js), '点卡片链接时没标记已读')
     // 已读只压视觉，不能把卡片藏起来或者禁用掉
     assert(css.includes('.card.is-read'), '缺少已读卡片的样式')
     assert(/\.card\.is-read \.card-title \{ color: var\(--ink-3\)/.test(css), '已读卡片标题没压灰（或用了对比度不够的色阶）')
@@ -311,7 +312,8 @@ async function main() {
     assert(js.includes('class="card-actions"'), '卡片缺少顶部操作区')
     assert(!js.includes('data-preview'), '卡片上又出现了页内预览（眼睛）按钮')
     assert(!js.includes('pv-btn'), '页内预览按钮的代码没清干净')
-    assert(js.includes('e.shiftKey') && js.includes('openPreview(doc)'), '页内预览没有保留 Shift + 点击入口')
+    assert(js.includes('class="card-link"'), '卡片缺少整卡链接')
+    assert(!js.includes('openPreview'), '页内浮层的代码没清干净')
     // 卡片顶部左侧显示推送时间（除标题外卡片上唯一的文字）
     assert(js.includes('class="card-time"'), '卡片缺少推送时间')
     assert(/card-time[\s\S]{0,200}fmtTime\(/.test(js), '卡片时间没有用统一的时间格式化')
@@ -370,34 +372,33 @@ async function main() {
     assert(css.includes('prefers-reduced-motion'), '未尊重系统的减弱动态效果')
   })
 
-  await check('打开方式：卡片默认在当前页打开', async () => {
+  await check('打开方式：点卡片换地址打开（/doc/<id>）', async () => {
+    // 2026-09-21 用户要求：点卡片「地址栏切换新的地址打开」，不再用页内浮层
     const js = await (await fetch(`${BASE}/app.js`)).text()
-    // 用户 2026-09-20：点卡片默认在当前页的预览浮层里打开，不再默认新开标签页
-    const at = js.indexOf("el.grid.addEventListener('click'")
-    assert(at > 0, '找不到卡片点击处理')
-    const cardClick = js.slice(at, at + 2600)
-    assert(cardClick.includes('openPreview(doc)'), '点击卡片默认没有在当前页打开')
-    assert(/if \(e\.shiftKey\) \{ openInNewWindow\(doc\); return \}/.test(cardClick), 'Shift + 点击没有走新窗口')
+    const html = await (await fetch(`${BASE}/`)).text()
 
-    // 新窗口这条路仍然留着（Shift + 点击 / Shift + 回车），
-    // 且必须**同步**开窗，否则 await 拉正文之后 window.open 会被弹窗拦截器拦掉
-    assert(js.includes('openInNewWindow'), '「新窗口打开」的实现被删了')
-    assert(js.includes(`window.open('', '_blank')`), '新窗口不是同步开的，会被浏览器当弹窗拦掉')
+    // 卡片链接就是真链接：普通点击换地址、Shift + 点击开新窗口、中键 / 右键「复制链接地址」
+    // 全都天然可用 —— 所以点击处理里**不能**再拦默认跳转
+    assert(js.includes('const docUrl = (id) =>'), '缺少详情页地址生成函数')
+    assert(js.includes('href="${docUrl(d.id)}"'), '卡片链接不是 /doc/<id> 真地址')
+    assert(!/card-link'\)\) e\.preventDefault/.test(js), '卡片点击又拦住了默认跳转')
+    assert(!js.includes('openPreview('), '页内浮层的打开入口没删干净')
+    assert(!js.includes("el.grid.addEventListener('keydown'"), '卡片键盘处理没删掉（原生 <a> 已够用）')
 
-    // 键盘两种按法要和鼠标对齐
-    const kat = js.indexOf("el.grid.addEventListener('keydown'")
-    assert(kat > 0, '找不到卡片的键盘处理')
-    const cardKey = js.slice(kat, kat + 1200)
-    assert(cardKey.includes('if (e.shiftKey) openInNewWindow(doc)'), 'Shift + 回车没有走新窗口')
-    assert(/else openPreview\(doc\)/.test(cardKey), '回车默认没有在当前页打开')
+    // 键盘 / 读屏仍然能走通：整卡链接可聚焦，回车是原生行为
+    assert(js.includes('class="card-link"'), '卡片缺少可聚焦的打开入口')
 
-    // 卡片链接的提示文案要跟默认行为一致，别还说「新窗口打开」
-    assert(js.includes('在当前页面打开'), '卡片链接的提示文案没跟着改')
+    // 新窗口这条路还在（Shift + 点击），并且同步开窗 —— 不能先 await 再 open
+    assert(js.includes('function openInNewWindow'), '「新窗口打开」的实现被删了')
+    assert(/window\.open\(docUrl\(doc\.id\), '_blank'\)/.test(js), '新窗口没有同步开真地址')
+    assert(!js.includes('windowShell'), 'blob 占位页的旧实现没删干净')
+
+    // 卡片链接的提示文案要跟新行为一致
+    assert(js.includes('title="打开内容（按住 Shift 在新窗口打开）"'), '卡片链接的提示文案没跟着改')
 
     // 预览页刻意不做顶栏（2026-09-20 用户要求）：内容是主角，页面铺满。
     // 退出只认悬浮关闭钮 + Esc，别把「返回 / 收藏 / 标签 / 新窗口 / 下载 / 编辑信息 / 删除」那一排加回来
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    const html = await (await fetch(`${BASE}/`)).text()
     assert(!html.includes('preview-bar'), '预览页又长出了顶栏')
     assert(!html.includes('preview-back'), '预览页又长出了「返回」按钮')
     assert(html.includes('id="preview-close"'), '预览页缺少悬浮关闭钮')
@@ -413,6 +414,24 @@ async function main() {
     assert(!/\.preview-close \{[^}]*border-radius/.test(css), '关闭钮又长出圆形底盘了')
     assert(/\.preview-close \{[^}]*border: 0/.test(css), '关闭钮又带上描边了')
     assert(/\.preview-close \{[^}]*background: none/.test(css), '关闭钮又加回底色了')
+  })
+
+  await check('详情页 /doc/<id> 是一张真页面', async () => {
+    // 2026-09-21 用户要求：换地址打开。地址栏里就是这个地址，
+    // 所以 server.js 必须把 /doc/<任意 id> 交给前端页面，而不是 404
+    const res = await fetch(`${BASE}/doc/56`)
+    assert(res.status === 200, `详情页期望 200，实际 ${res.status}`)
+    const body = await res.text()
+    assert(body.includes('id="preview-frame"'), '详情页没带着正文容器')
+    assert(body.includes('id="preview-close"'), '详情页缺少退出入口')
+    // /doc/x 下的相对路径会解析成 /doc/styles.css，所以静态资源必须写绝对路径
+    assert(body.includes('href="/styles.css"'), '样式表不是绝对路径（详情页会 404）')
+    assert(body.includes('src="/app.js"'), 'app.js 不是绝对路径（详情页会 404）')
+    assert(!/(?:src|href)="\.\//.test(body), '还有 ./ 相对路径的资源引用（详情页会 404）')
+    // 同一个 id 仍然能拿到内容：详情页正文是前端按 id 拉的，这里只认页面本身
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    assert(js.includes('renderDocPage(DOC_ROUTE)'), '启动时没有按地址分流出详情页')
+    assert(js.includes('classList.add(\'is-doc\')'), '详情页没收起列表那一块')
   })
 
   await check('接口说明用真实端点，不写死', async () => {

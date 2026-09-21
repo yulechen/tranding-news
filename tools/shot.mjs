@@ -180,7 +180,10 @@ async function main() {
           })
           break
         } catch (err) {
-          if (!/context was destroyed|Cannot find context/i.test(err.message)) throw err
+          // 页面自己跳走（点链接换地址）时，报错文案不止一种：
+          // context was destroyed / Cannot find context / Inspected target navigated or closed
+          // —— 都当成「重跑一次脚本」处理，别直接判失败
+          if (!/context was destroyed|Cannot find context|Inspected target navigated/i.test(err.message)) throw err
           await sleep(1200)
         }
       }

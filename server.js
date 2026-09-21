@@ -368,6 +368,12 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // 内容详情页 /doc/<id>：地址栏里就是这个地址（可分享 / 刷新 / 收藏 / 前进后退）。
+  // 页面本身还是 index.html，由前端从 pathname 里读 id 并渲染成整屏正文。
+  if (/^\/doc\/[^/]+\/?$/.test(pathname)) {
+    return handleStatic(req, res, '/index.html')
+  }
+
   return handleStatic(req, res, pathname)
 })
 

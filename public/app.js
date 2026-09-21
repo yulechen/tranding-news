@@ -118,6 +118,15 @@
   // 三个筛选条件互相叠加：分类 / 只看收藏 / 只看未读
   const view = { type: 'all', starred: false, unread: false }
 
+  /* 详情页路由（2026-09-21 用户要求：点卡片「换地址打开」，不再用页内浮层）。
+     真地址 = /doc/<id>，由 server.js 交给本页渲染 —— 地址栏里是真的地址，
+     刷新 / 分享 / 后退 / 新窗口 / 右键「复制链接地址」全都天然成立。 */
+  const DOC_ROUTE = (() => {
+    const m = /^\/doc\/([^/]+)\/?$/.exec(location.pathname)
+    return m ? decodeURIComponent(m[1]) : ''
+  })()
+  const docUrl = (id) => '/doc/' + encodeURIComponent(id)
+
   /* ── 通用工具 ─────────────────────────────────────────── */
 
   function escapeHtml(s) {
@@ -543,7 +552,7 @@
             </button>
           </div>
         </div>
-        <h3 class="card-title"><a class="card-link" href="#doc-${d.id}" data-open="${d.id}" title="在当前页面打开（按住 Shift 在新窗口打开）">${title}</a></h3>
+        <h3 class="card-title"><a class="card-link" href="${docUrl(d.id)}" data-open="${d.id}" title="打开内容（按住 Shift 在新窗口打开）">${title}</a></h3>
       </article>`
     }).join('')
   }
@@ -561,28 +570,61 @@
     return String(data.content || '')
   }
 
-  async function openPreview(doc) {
-    if (!doc) return
-    markRead(doc.id)
-    current = doc
-    currentHtml = ''
-    el.previewFrame.srcdoc = previewShell('正在载入…')
-    const already = isOpen(el.preview)
+  /** 详情页一次把标题和正文都取回来（标题要用来做浏览器标签的标题） */
+  async function fetchDoc(id) {
+    const { data, error } = await cloud.database
+      .from('documents')
+      .select('id,title,content')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) throw new Error('这条内容已经被删掉了')
+    return data
+  }
+
+  /**
+   * 详情页（/doc/<id>）—— 这里**不是浮层**，而是地址栏里真实存在的一张页面：
+   * 页面本身就是 index.html，只是把列表整块收起来、把铺满整屏的 #preview 当整页用。
+   * 所以刷新 / 分享 / 后退 / 新窗口全都天然成立。
+   */
+  async function renderDocPage(id) {
+    document.body.classList.add('is-doc')
+    el.boot.classList.add('is-hidden')
+    el.mainView.classList.add('is-hidden')
     el.preview.classList.remove('is-hidden')
-    if (!already) {
-      lastFocus = document.activeElement
-      lockScroll()
-    }
+    el.previewFrame.srcdoc = previewShell('正在载入…')
+    lockScroll()
     // 键盘用户进来后焦点落在关闭钮上，看完直接回车就退出去
     setTimeout(() => el.previewClose.focus(), 40)
 
     try {
-      const html = await fetchContent(doc.id)
-      currentHtml = html
-      el.previewFrame.srcdoc = html || previewShell('这条内容是空的')
+      const doc = await fetchDoc(id)
+      current = doc
+      currentHtml = String(doc.content || '')
+      el.previewFrame.srcdoc = currentHtml || previewShell('这条内容是空的')
+      document.title = (doc.title ? doc.title + ' · ' : '') + '云端信息库'
+      markRead(id)
     } catch (err) {
       el.previewFrame.srcdoc = previewShell(`<b>内容载入失败</b>${escapeHtml(friendly(err))}`)
     }
+  }
+
+  /**
+   * 退出详情页 —— 关闭「×」和 Esc 都走这里。
+   * 详情页是真页面：从列表点进来的就原路退回（筛选还在），
+   * 直接打开这个地址、没有站内来路的就回列表首页。
+   */
+  function leaveDoc() {
+    if (DOC_ROUTE) {
+      let sameSite = false
+      try {
+        sameSite = !!document.referrer && new URL(document.referrer).origin === location.origin
+      } catch (e) { /* 来路解析不了就当没有，回首页 */ }
+      if (sameSite && history.length > 1) history.back()
+      else location.assign('/')
+      return
+    }
+    closePreview()
   }
 
   function closePreview() {
@@ -609,80 +651,24 @@
     setTimeout(() => URL.revokeObjectURL(url), 4000)
   }
 
-  // 新窗口的占位页：极简、不依赖站内样式，正文到之前先让用户看到「在载入」
-  function windowShell(title, message) {
-    return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">` +
-      `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-      `<title>${escapeHtml(title || '内容')}</title><style>` +
-      `html,body{margin:0;height:100%}` +
-      `body{display:grid;place-items:center;background:#f4f5f7;color:#6b7280;` +
-      `font:15px/1.7 system-ui,-apple-system,"PingFang SC",sans-serif}` +
-      `.box{text-align:center;padding:40px 24px;max-width:34em}` +
-      `.spin{width:26px;height:26px;margin:0 auto 14px;border-radius:50%;` +
-      `border:2.5px solid #dfe3ea;border-top-color:#2563eb;animation:sp .8s linear infinite}` +
-      `@keyframes sp{to{transform:rotate(360deg)}}` +
-      `@media (prefers-reduced-motion:reduce){.spin{animation:none}}` +
-      `</style></head><body><div class="box">${message === '正在载入…' ? '<div class="spin"></div>' : ''}${message || '正在载入…'}</div></body></html>`
-  }
-
   /**
-   * 在新窗口打开内容 —— **备用**打开方式（Shift + 点击 / Shift + 回车，
-   * 以及预览页顶栏的「新窗口」按钮）。默认路径是 openPreview，在当前页里看。
-   *
-   * ⚠️ 顺序不能改：`window.open` 必须**同步**调用。正文要现拉（列表不取 content 字段），
-   * 一旦先 await 再 open，浏览器就不再把这当成用户手势的一部分，新窗口会被弹窗拦截器拦掉。
-   * 所以这里先同步开一个空白窗占位、写入载入页，拿到正文后再把窗口导航到 blob URL。
+   * 在新窗口打开内容（Shift + 点击 / Shift + 回车）。
+   * 详情页有了真地址，这里直接开 /doc/<id> —— 同步、不用等正文再导航，
+   * 所以不会再被弹窗拦截器盯上；右键「复制链接地址」拿到的也是这个地址。
    */
-  async function openInNewWindow(doc, preloaded) {
+  function openInNewWindow(doc) {
     if (!doc) return
     markRead(doc.id)
-    const win = window.open('', '_blank')
-    if (!win) {
-      toast('新窗口被浏览器拦住了，允许本站弹出窗口后再试', 'err')
-      return
-    }
-
-    try {
-      win.document.write(windowShell(doc.title, '正在载入…'))
-      win.document.close()
-    } catch (e) {
-      /* 少数浏览器不允许写空白窗，那就只等后面的导航，不再兜底 */
-    }
-
-    let html = ''
-    try {
-      html = preloaded || await fetchContent(doc.id)
-    } catch (err) {
-      try {
-        win.document.body.innerHTML =
-          `<div class="box">内容载入失败：${escapeHtml(friendly(err))}</div>`
-      } catch (e) {
-        /* 用户可能已经把新窗口关了 */
-      }
-      toast(friendly(err), 'err')
-      return
-    }
-
-    try {
-      const blob = new Blob([html || windowShell(doc.title, '这条内容是空的')], {
-        type: 'text/html;charset=utf-8'
-      })
-      const url = URL.createObjectURL(blob)
-      win.location.replace(url)
-      // 窗口可能开着很久，刷新也还用得到这个地址，给足时间再回收
-      setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000)
-    } catch (e) {
-      /* 正文拿到了但占位窗已被关掉 —— 静默即可，不是错误 */
-    }
+    const win = window.open(docUrl(doc.id), '_blank')
+    if (!win) toast('新窗口被浏览器拦住了，允许本站弹出窗口后再试', 'err')
   }
 
   /**
-   * 预览页里的操作分发。
+   * 详情页里的操作分发。
    *
-   * ⚠️ 2026-09-20 起预览页的顶栏整个去掉了（用户要求「不要顶栏」），
-   * 所以这个函数目前**没有 UI 调用入口**。保留它是因为「下载」和「编辑信息」
-   * 只在这里有实现 —— 收藏 / 标签 / 删除 / 新窗口在卡片和 Shift + 点击上都还能用，
-   * 唯独这两个暂时没有别的地方可点。等定了新入口（卡片、长按、悬浮菜单）再接回来。
+   * ⚠️ 没有 UI 调用入口（2026-09-20 用户要求去掉整条顶栏，2026-09-21 又改成真页面）。
+   * 保留它是因为「下载」和「编辑信息」只在这里有实现 —— 收藏 / 删除 / 新窗口在卡片和
+   * Shift + 点击上都还能用，唯独这两个暂时没地方可点。等定了新入口再接回来。
    */
   async function actOnCurrent(act) {
     const doc = current
@@ -694,8 +680,7 @@
     }
 
     if (act === 'open') {
-      // 走到这里说明正文多半已经在内存里了，直接复用
-      await openInNewWindow(doc, currentHtml)
+      await openInNewWindow(doc)
       return
     }
 
@@ -1161,33 +1146,13 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
         if (doc) deleteDoc(doc)
         return
       }
-      // 卡片正文是铺满整卡的链接：键盘能 Tab 到、回车能开。
-      // 拦下默认跳转，地址栏不会被 #doc-x 弄脏。
-      if (e.target.closest('a.card-link')) e.preventDefault()
-
-      const card = e.target.closest('.card')
-      if (!card) return
-      const doc = docs.find((d) => String(d.id) === card.dataset.id)
-      if (!doc) return
-      // 默认打开方式：在当前页的预览浮层里打开（用户 2026-09-20 要求，不再默认新开标签页）。
-      // 想单开一页就 Shift + 点击 —— 注意不要 await，openInNewWindow 内部要同步把
-      // window.open 发出去，保住用户手势，否则会被弹窗拦截器拦掉。
-      if (e.shiftKey) { openInNewWindow(doc); return }
-      openPreview(doc)
-    })
-
-    // 键盘：回车 = 在当前页打开，Shift + 回车 = 新窗口（与鼠标两种点法对齐）。
-    // 这里对 Enter 一律 preventDefault，顺带压掉浏览器合成的 click，免得开两次。
-    el.grid.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return
+      // 卡片正文是铺满整卡的链接。2026-09-21 用户要求「换地址打开」，
+      // 所以这里**不拦默认跳转**：让浏览器自己按 <a href="/doc/<id>"> 走 ——
+      // 普通点击换地址、Shift + 点击开新窗口、中键 / 右键「复制链接地址」，全都天然可用；
+      // 键盘 Tab + 回车也是原生行为，不再需要额外的 keydown 处理。
+      // 这里唯一要做的就是把「已读」记下来（localStorage 是同步写，跳走也来得及）。
       const link = e.target.closest('a.card-link')
-      if (!link) return
-      const card = link.closest('.card')
-      const doc = card && docs.find((d) => String(d.id) === card.dataset.id)
-      if (!doc) return
-      e.preventDefault()
-      if (e.shiftKey) openInNewWindow(doc)
-      else openPreview(doc)
+      if (link) markRead(link.dataset.open)
     })
 
     // 分类编辑：工具栏右侧的图标打开，点一下就改一条、即改即存
@@ -1215,8 +1180,8 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
     el.btnArchiveAll.addEventListener('click', archiveAllInbox)
     el.btnDismissInbox.addEventListener('click', clearInbox)
 
-    // 预览没有顶栏，只有一颗悬浮关闭钮（Esc 同样能退）
-    el.previewClose.addEventListener('click', closePreview)
+    // 详情页没有顶栏，只有一颗悬浮关闭钮（Esc 同样能退）
+    el.previewClose.addEventListener('click', leaveDoc)
 
     document.addEventListener('keydown', (e) => {
       // Tab 锁在弹窗内，别让焦点跑到背后的列表上
@@ -1225,7 +1190,7 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
       if (isOpen(el.confirmModal)) return settleConfirm(false)
       if (isOpen(el.apiModal)) return closeApiDoc()
       if (isOpen(el.editModal)) { closeModal(el.editModal); editing = null; return }
-      if (isOpen(el.preview)) return closePreview()
+      if (isOpen(el.preview)) return leaveDoc()
     })
 
     window.addEventListener('hashchange', () => {
@@ -1255,16 +1220,22 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
   function start() {
     bindEvents()
 
-    const hash = readHash()
-    view.starred = hash.starred
-    view.unread = hash.unread
-
     try {
       cloud = initCloud()
     } catch (err) {
       el.boot.innerHTML = `<p style="color:#dc2626;max-width:340px;text-align:center;line-height:1.6">${escapeHtml(err.message)}</p>`
       return
     }
+
+    // 详情页：只渲染这一条正文，列表和底栏都不加载（也少一次列表请求）
+    if (DOC_ROUTE) {
+      renderDocPage(DOC_ROUTE)
+      return
+    }
+
+    const hash = readHash()
+    view.starred = hash.starred
+    view.unread = hash.unread
 
     el.boot.classList.add('is-hidden')
     el.mainView.classList.remove('is-hidden')

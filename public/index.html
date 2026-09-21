@@ -6,11 +6,11 @@
 <meta name="color-scheme" content="light">
 <meta name="description" content="把 WorkBuddy 生成的内容统一归档、按分类回看。公开可看，无需登录。">
 <title>云端信息库</title>
-<link rel="icon" href="./favicon.svg" type="image/svg+xml">
-<link rel="alternate icon" href="./favicon.ico" sizes="any">
-<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#2563eb">
-<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 
@@ -91,11 +91,14 @@
   </div>
 </div>
 
-<!-- ══════════ 预览 ══════════ -->
-<div id="preview" class="preview is-hidden" role="region" aria-label="内容预览">
+<!-- ══════════ 内容详情页（/doc/<id>） ══════════ -->
+<!-- 2026-09-21 用户要求：点卡片换地址打开，不再用页内浮层。
+     这条路由下整页就是这一块 —— 列表收起来，它铺满整屏，地址栏里是真的地址，
+     所以刷新 / 分享 / 后退 / 新窗口全都天然成立。 -->
+<div id="preview" class="preview is-hidden" role="region" aria-label="内容详情">
   <!-- 刻意不做顶栏（2026-09-20 用户要求）：内容是主角，页面铺满。
-       只留一个悬浮的关闭钮，不占布局、压在内容之上 -->
-  <button type="button" class="preview-close" id="preview-close" title="关闭（Esc）" aria-label="关闭预览">
+       退出只认这一颗悬浮的「×」和 Esc，不占布局、压在内容之上 -->
+  <button type="button" class="preview-close" id="preview-close" title="返回列表（Esc）" aria-label="返回列表">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
   </button>
   <div class="preview-body">
@@ -195,8 +198,8 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="./config.js"></script>
-<script src="./vendor/workbuddy-cloud-sdk.js"></script>
-<script src="./app.js"></script>
+<script src="/config.js"></script>
+<script src="/vendor/workbuddy-cloud-sdk.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

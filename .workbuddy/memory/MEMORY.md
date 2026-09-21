@@ -68,9 +68,17 @@
   深链 `#fav` / `#unread`；分面计数先叠两个开关再按分类数（**不等于**当前列表条数，故意如此）
 - 打开即已读（`.is-read` 灰化：`--surface-2` 底 + `--ink-3` 标题；hover 恢复满对比度）；下载不算已读；
   别的标签页读过后靠 `storage` 事件同步
-- 打开方式：**点卡片 → 当前页预览浮层**；**Shift + 点击 / Shift + 回车 → 新窗口**
-  （`window.open` 必须**同步**发 —— 先开占位窗再 `location.replace`，先 `await` 会被拦截；Enter 一律 `preventDefault`）
-- 预览页**没有任何横条**（顶栏底栏都没有），iframe 铺满整屏，退出只认「×」+ Esc（打开时焦点落在它上面）
+- 打开方式（2026-09-21 用户改口径）：**点卡片 → 换地址打开 `/doc/<id>`**（🚫 不再用页内浮层）；
+  **Shift + 点击 → 新窗口开同一地址**。卡片是**真 `<a href>`**，中键 / 右键「复制链接地址」/ 回车
+  全是原生行为 —— 点击处理里只记已读，**不许再 `preventDefault`**，也不需要 keydown（原生 Enter 会合成 click）
+- 详情页由 **`server.js` 把 `/doc/<id>` 交给 `public/index.html`** 渲染，前端靠 `location.pathname`
+  分流（`DOC_ROUTE` / `renderDocPage` / `leaveDoc` / `docUrl`）。
+  ⚠️⚠️ 所以 **index.html 里的静态资源必须写绝对路径**（`/styles.css` `/app.js` …）——
+  写成 `./styles.css` 在 `/doc/55` 下会解析成 `/doc/styles.css` 直接 404（自检反向守着）
+- 详情页**没有任何横条**（顶栏底栏都没有），iframe 铺满整屏、列表整块 `display:none`，
+  退出只认「×」+ Esc（打开时焦点落在它上面）：从列表点进来的 `history.back()`（筛选还在），
+  直接打开地址的回 `/`（判据：`document.referrer` 同源）
+- 🚫 已删：`openPreview()`（页内浮层）与 `windowShell()`（blob 占位窗）—— 别当"丢了"补回来
   - **关闭钮：底部正中 + 裸「×」**（2026-09-21 用户连改两轮：右上角 → 顶部正中 → 底部正中，再去掉圆形底盘）
     `position:absolute; bottom:var(--sp-3); left:50%; margin-left:-19px`；`border:0` + `background:none` +
     无 `border-radius` / `box-shadow`；图标 22px（≤680 收到 20px、盒子 34px）
@@ -105,7 +113,10 @@
 - ⚠️ 拍照脚本长了必须用 `--script-file`（否则被 shell 引号咬）；**`--w 360` 拍不出窄屏**
   （Chrome 无头窗口有 500px 下限，截图和 `innerWidth` 都是 500）→ 用 `--vw 360 --vh 700` 设备模拟；
   合成 `element.click()` 会让随后的 `focus()` 画出焦点环（真实鼠标用户看不到），拍照前 `blur()`；
-  焦点环有无要读 `getComputedStyle`，不能只看截图
+  焦点环有无要读 `getComputedStyle`，不能只看截图；
+  **脚本里让页面自己跳走**（点链接换地址）时 CDP 报的是「Inspected target navigated or closed」，
+  `shot.mjs` 只重试「context was destroyed / Cannot find context」两种 → 已把这条也加进重试；
+  重试会把同一段脚本在新页面上**重跑一遍**，所以探针要写成「两个页面都能跑、按 pathname 分流」
 - ⚠️ **3300 端口被 trandingos_v3（股票自选）占着** —— 用户自己在跑，**别 kill**；Windows 允许同端口重复绑定，
   **先绑定的接走请求**（自己的服务照常打印「已启动」，抓到的是别人的页面）→ 起临时服务挑 3517 这类冷门端口，
   起完先 fetch 用特征词自证

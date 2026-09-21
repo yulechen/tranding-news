@@ -34,38 +34,34 @@
   🚫 别改用 `documents`，那会往真实内容库写测试数据
 
 ## 前端口径（用户逐条定过，别自作主张回退）
-### 底栏（原顶栏，2026-09-21 用户要求整条挪到页面底部）
-- **固定在视口底部**：`position: fixed; left/right: 0; bottom: 0; z-index: 40`；整条只剩一排按钮：
-  `#btn-unread` 未读 · `#btn-fav` 收藏 · `#btn-api` 接口 · `#btn-refresh` 刷新；
-  都只有图标（接口/刷新带文字，≤680 隐掉）、共用 `.fav-btn, .unread-btn` 骨架（未读蓝 / 收藏琥珀）
-- **图标沿整条长度均分**（2026-09-21 用户：「图标平均分布底栏长度」，此前是缩成一簇居中）：
-  `.bottombar-actions { flex: 1; min-width: 0; justify-content: space-evenly; gap: 0 }`。
-  底栏里唯一的在流子元素就是这组按钮（`#stat-text` 是 absolute），所以整组 flex:1 = 铺满整条；
-  🚫 别加回 `justify-content: center` 或 `margin-left: auto`（自检反向守着）
-- **高度 = 21px（≤680 → 19px）**，2026-09-21 用户要求「太高了，降到原来的 1/3」（原 62 / 58px）。
-  条变薄后控件尺寸**全部由高度派生**，改高度只动 `--bottombar-h` 一处：
-  `--bottombar-ctrl: calc(var(--bottombar-h) - 2px)`（按钮盒子）、
-  `--bottombar-ico: calc(var(--bottombar-h) - 8px)`（图标 13 / 11px）。
-  🚫 别再写死 38px / 34px —— 薄条会被大按钮撑破（自检反向守着）
-- 命名一律 `bottombar`（类名 + token `--bottombar-h`）。🚫 别再写回 `topbar`：
-  标签里不放注释、自检里 `!css.includes('topbar')` / `!html.includes('topbar')` 反向守着
-- 结构：`<div class="bottombar">` 放在 **`main` 之后**（Tab 顺序 = 视觉顺序）；用 `min-height` 而非 `height`，
-  配 `padding-bottom: env(safe-area-inset-bottom)` 吃 iPhone 安全区；分隔线在**顶边** `border-top`；
-  那道从左淡出的蓝渐变是 `.bottombar::after { top: -1px }`（原来在底边，用户没要求删）
-- 🚫 **没有品牌**（2026-09-21 取消站标）：云朵图标 + 「云端信息库」站名、`.brand / .brand-mark / .brand-name`
-  全删（含 ≤900 / ≤680 两条断点规则）（启动动画 `.boot-mark` 没动）
-- 🚫 不显示条数（`#stat-text` 套 `.visually-hidden`，只给读屏播报；它是 absolute，不参与居中）
-- ≤680 只留图标（`.bottombar-actions .btn span { display: none }`）；热区靠伪元素撑
-  `inset: -6px -12px`（视觉 19px → 热区 31×43px）—— 图标隔得远，横向放宽不会互相压住
-- ⚠️ 固定底栏的两个连带项，改底栏高度时必须一起动：`.content` 底部 padding =
-  `calc(var(--bottombar-h) + var(--sp-5) + env(safe-area-inset-bottom))`（否则最后一张卡被压住）；
-  `.toast` 的 bottom 也要抬到 `calc(var(--bottombar-h) + var(--sp-4) + env(...))`（否则 toast 被盖住）
+### 底栏（原顶栏 → 底栏 → 2026-09-21 用户要求整条取消，控件搬进筛选条）
+- 🚫 **底栏与顶栏都已不存在**：`bottombar` / `topbar` 的 DOM 与样式全删，命名一个都不许回潮
+  （自检反向守着：`!html.includes('bottombar')` / `!css.includes('bottombar')` /
+  `!css.includes('--bottombar')` / `!html.includes('topbar') && !css.includes('topbar')`）
+- 原来底栏上四个入口的归宿：**未读** → 筛选条 `#btn-unread`；**收藏** → 先搬进筛选条、当天又被
+  要求取消；**接口说明** `#btn-api` 与**刷新** `#btn-refresh` → 入口一并收掉，实现与接口文档都留着
+  （`closeApiDoc` / `loadDocs` 还在），只是页面上没得点
+- 去固定底栏时两处连带项也回退了：`.content` 底部 padding 回到
+  `calc(var(--sp-5) + env(safe-area-inset-bottom, 0px))`、`.toast` 的 bottom 回到 `var(--sp-4)` 一档
+
+### 筛选条（`section.toolbar`）
+- 左边 = 分类分段控件 `.segmented`（可横滑）；`#stat-text` 是 `.visually-hidden`（🚫 不显示条数）；
+  右边 `.tool-actions { margin-left: auto; flex: none }` 顶到另一头，里面**只剩两个图标按钮**：
+  `#btn-unread`（只看未读，点亮蓝）在左、`#btn-cat`（逐条改分类）在右
+- 两个按钮跟分类入口同一副骨架、同一档尺寸（走 `--tool-btn: 34px` / `--tool-ico`），
+  只有图标不带文字，热区靠 `::after { inset: -5px }` 撑到 44px；🚫 别再写死 38 / 34px（自检反向守着）
+- ⚠️ **整站没有任何收藏入口**了（2026-09-21：「取消卡片页上面的收藏」+「取消收藏过滤」）。
+  演变链：底栏收藏按钮 → 搬进筛选条 `#btn-fav` → 取消。
+  **保留面**（实现留着、只是没入口，别当死代码删）：`toggleStar()` 仍由 `actOnCurrent('star')` 调用、
+  `documents.starred` 仍在 `LIST_FIELDS`、`.card.is-starred` 与 `--star*` token 都还在 ——
+  要加回入口只是接线的事
 
 ### 卡片 / 筛选 / 已读
-- 只有「推送时间 + 标题」+ 两个图标 `data-star` / `data-del`；🚫 眼睛（页内预览）与标签两个按钮都被要求删掉；
-  类型色条也删了（所有卡片边框一样）；骨架屏只有 `.sk-icons` + `.sk-title`
-- 筛选三者叠加：分类 × 收藏 × 未读；未读 = 不在本机 `localStorage.iv_read`（站点公开，「谁读的」无从区分）；
-  深链 `#fav` / `#unread`；分面计数先叠两个开关再按分类数（**不等于**当前列表条数，故意如此）
+- 卡片只有「推送时间 + 标题」+ **一个删除图标** `data-del`（🚫 星标 / 眼睛 / 标签 / 类型色条
+  都被用户要求删掉了，别自作主张加回来）；骨架屏只有 `.sk-icons` + `.sk-title`
+- 筛选两者叠加：**分类 × 未读**；未读 = 不在本机 `localStorage.iv_read`（站点公开，「谁读的」无从区分）；
+  深链只剩 `#unread`（`#fav` 已删 —— 老书签点开就是全部内容，不再进任何视角）；
+  分面计数先叠未读开关再按分类数（**不等于**当前列表条数，故意如此）
 - 打开即已读（`.is-read` 灰化：`--surface-2` 底 + `--ink-3` 标题；hover 恢复满对比度）；下载不算已读；
   别的标签页读过后靠 `storage` 事件同步
 - 打开方式（2026-09-21 用户改口径）：**点卡片 → 换地址打开 `/doc/<id>`**（🚫 不再用页内浮层）；
@@ -90,7 +86,8 @@
   - 替代的焦点落点：`#preview` 带 `tabindex="-1"`，脚本 `el.preview.focus()` 把焦点移进去，
     好让读屏念出「内容详情」；容器不可交互，所以 `#preview:focus { outline: none }` 关掉贴边蓝框
     （`[tabindex]:focus-visible` 的通用焦点环会画出来，必须显式压掉）
-  - `actOnCurrent()` **故意没有 UI 入口但留着**（「下载」「编辑信息」只在这里实现），别当死代码删
+  - `actOnCurrent()` **故意没有 UI 入口但留着**（「下载」「编辑信息」「收藏」都只在这里实现，
+    后两者连按钮都撤了），别当死代码删
 
 ### 分类
 - 只有三类 `report` 报告 / `watchlist` 自选 / `plan` 计划（+ 分段控件的「全部」）；🚫 旧
@@ -133,7 +130,7 @@
 
 ## 常用命令
 - 起服务 `PORT=3517 node server.js`（默认 3000）
-- 自检 `node tools/selfcheck.mjs [--base <url>]` —— **本地 35 项 / 线上 37 项**全绿
+- 自检 `node tools/selfcheck.mjs [--base <url>]` —— **本地 36 项 / 线上 38 项**全绿
   （「开放接口」组只对非 localhost 执行，线上多 2 项）
 - 推送（默认直接入库、不带标签）`node tools/push.mjs --file a.html --title … --summary … --type report`；`--inbox` 走暂存
 - 截图 `node tools/shot.mjs --out x.png [--script-file f] [--vw/--vh]`｜图标 `node tools/make-icons.mjs`

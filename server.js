@@ -164,17 +164,24 @@ async function readInboxItem(id) {
   }
 }
 
+/**
+ * 删除收件箱条目。
+ * 文件本来就不在（已经删过）→ 返回 false，调用方回 404；
+ * 文件在但删不掉（被占用 / 权限不足）→ 抛出去，**不要谎报成「条目不存在」**。
+ */
 async function removeInboxItem(id) {
   if (!isSafeId(id)) return false
   let removed = false
+  let blocked = null
   for (const ext of ['.json', '.html']) {
     try {
       await fsp.unlink(path.join(INBOX_DIR, `${id}${ext}`))
       removed = true
-    } catch {
-      /* 不存在就跳过 */
+    } catch (err) {
+      if (!err || err.code !== 'ENOENT') blocked = err
     }
   }
+  if (!removed && blocked) throw blocked
   return removed
 }
 
@@ -182,7 +189,7 @@ async function clearInbox() {
   const items = await listInbox()
   let removed = 0
   for (const it of items) {
-    if (await removeInboxItem(it.id)) removed += 1
+    if (await removeInboxItem(it.id).catch(() => false)) removed += 1
   }
   return removed
 }
@@ -295,7 +302,13 @@ async function handleInboxApi(req, res, url, segments) {
   }
 
   if (req.method === 'DELETE') {
-    const removed = await removeInboxItem(id)
+    let removed
+    try {
+      removed = await removeInboxItem(id)
+    } catch (err) {
+      console.warn('[inbox] 删除失败：', (err && (err.code || err.message)) || err)
+      return sendJson(res, 500, { ok: false, error: '删除失败：文件被占用或权限不足' })
+    }
     return sendJson(res, removed ? 200 : 404, { ok: removed, error: removed ? undefined : '条目不存在' })
   }
 

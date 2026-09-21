@@ -16,7 +16,7 @@
  *
  * 其他可选参数：
  *   --summary <s>   一句话摘要
- *   --type <s>      内容类型：report / dashboard / tool / page / other
+ *   --type <s>      内容分类：report（报告）/ watchlist（自选）/ plan（计划），默认 report
  *   --base <url>    目标站点，默认线上地址；本地调试传 http://127.0.0.1:3000
  *   --stdin         从标准输入读取 HTML
  *   --dry           只打印，不发送
@@ -39,7 +39,7 @@ const ROOT = path.resolve(__dirname, '..')
 const DEFAULT_BASE = 'https://info-vault.app.workbuddy.host'
 const INGEST_KEY = process.env.INGEST_KEY || 'iv_ing_7f3a9c2e5b8d4160a1f6e9c4b7d20385'
 const MAX_CONTENT = 2 * 1024 * 1024
-const TYPE_KEYS = ['report', 'dashboard', 'tool', 'page', 'other']
+const TYPE_KEYS = ['report', 'watchlist', 'plan']
 
 const SDK_FILE = path.join(ROOT, 'public', 'vendor', 'workbuddy-cloud-sdk.js')
 const CONFIG_FILE = path.join(ROOT, 'public', 'config.js')
@@ -170,7 +170,7 @@ async function publishDirect(payload, base) {
     title: String(payload.title).slice(0, 200),
     summary: String(payload.summary || '').slice(0, 500),
     tags: [],                                  // 标签只由用户在页面上维护
-    doc_type: TYPE_KEYS.includes(payload.docType) ? payload.docType : 'other',
+    doc_type: TYPE_KEYS.includes(payload.docType) ? payload.docType : 'report',
     source: payload.source || 'workbuddy',
     content: payload.html,
     file_size: size

@@ -1,167 +1,107 @@
-# 云端信息库 · 项目长期记忆
+# 云端信息库 · 项目长期记忆（tranding-news）
 
-## 关键标识
-- 云应用 appId：`wbapp_nYUBg7YCbzNbEX9V2pDJ4d` —— **发布时必须复用这个 id**，换新 id 会导致域名变、云登录 Origin 校验失败
-- 重新发布的调用式：`action` 默认 deploy，带 `appId` + `domainPrefix: "info-vault"` +
-  **`userAskedToPublish: true`（对应用户当轮明确说「上线」）+ `updateExistingApp: true`**
-  —— 后两个都不能省：前者是平台的发布同意校验（**不跨轮继承**，改了内容就必须重新问），
-  后者保证复用同一 app 且**不改动它的显示名**。
-- 线上地址 / 云数据面 endpoint：`https://info-vault.app.workbuddy.host`
-- 收件箱写入密钥 `INGEST_KEY`：出现在 **4 处**，改一处必须全改 ——
-  `server.js` 与 `tools/push.mjs`、`tools/selfcheck.mjs` 里的 `process.env.INGEST_KEY || '...'` 兜底，
-  以及 `public/app.js` 第 11 行**内联明文**（收件箱条鉴权用）。
-  ⚠️ 因为是内联在浏览器端，这个密钥**本来就是公开的**，别把它当机密。
+> 过程细节见同目录按日日志（2026-09-19 / 20 / 21.md）。这里只留**还会用到的口径与坑**。
 
-## 代码仓库（GitHub）
-- 远端：`https://github.com/yulechen/tranding-news`（**PUBLIC**），分支 `main`，远端地址名 `origin`
-- 身份只配在 **repo 局部**（`yulechen` / `3973126+yulechen@users.noreply.github.com`），不动全局配置
-- `core.autocrlf` 全局为 `true`，本仓库**局部设为 `false`**（源文件均为 LF）
-- 🚫 **`.gitignore` 里临时文件规则必须写 `.tmp-*`**，写成 `.tmp-*/` 带尾斜杠只匹配目录，
-  会让临时文件被 `git add -A` 一起提交（已踩过一次）
-- 验证忽略规则用 `git check-ignore -v --no-index <path>`；**不加 `--no-index` 时，
-  已跟踪文件一律报「未忽略」**，会误判规则失效
-- ⚠️ **沙箱下 `git fetch` 写不进 `refs/remotes/origin/main`**：`fetch` 会打印
-  `[new branch] main -> origin/main`，但本地其实没落盘，表现为 `status -sb` 显示 `[gone]`、
-  `rev-parse origin/main` 解析失败。**这不是远端问题** —— 判据是 `git ls-remote origin`。
-  修法：用 node 直接 `.git/refs/remotes/origin/main` 写入 sha 后即恢复正常。
-  **远端状态永远以 `git ls-remote` / `gh api` 为准。**
-- 排除项：`design/preview/*.png`（可由 `tools/shot.mjs` / `make-icons.mjs` 重新生成）、
-  `inbox/*`（保留 `.gitkeep`）、`.tmp-*`、`node_modules/`
+## 标识 / 发布
+- 云应用 appId `wbapp_nYUBg7YCbzNbEX9V2pDJ4d` **必须复用**（换 id → 域名变 + 云登录 Origin 校验失败）
+- 发布传参：`domainPrefix:"info-vault"` + `userAskedToPublish:true`（**仅当轮明确说「上线」才加，不跨轮继承**）
+  + `updateExistingApp:true`（复用同一 app 不改显示名）→ 线上 `https://info-vault.app.workbuddy.host`
+- 🖼 **UI 改动默认先本地给用户看，是否上线听用户那句话**（用户会逐条看到位）
+- ⚠️ 站点前置腾讯云 WAF：入库内容含 `<script>` / `on*=` 事件属性 / `eval(` 字样 → **整体 403**（返回体是拦截页
+  HTML 不是 JSON，`push.mjs` 会打一大段乱码）。`../` 相对路径、126 KB 纯中文正文都放行 —— 不是体积问题。
+  带交互的页面只能推「去掉 `<script>` 与 `on*=` 的静态降级版」；🚫 不做变形伪装绕 WAF
 
-## 架构约定
-- 前端是纯静态、无构建步骤：云 SDK 走自托管 `public/vendor/workbuddy-cloud-sdk.js`（不用 CDN，避免国内加载不稳）
-- 后端 `server.js` 零第三方依赖，只做两件事：静态托管 + `/api/inbox` 收件箱
-- **站点公开、无需登录**（用户 2026-09-19 明确要求「不需要注册验证，全部都可以看」）：`documents` 四条 RLS 策略全部放开为 `true`，`owner_id` 允许为空
-- 内容正文（HTML 源码）直接存在 `documents.content` 字段，**不用云对象存储** —— Storage 必须登录才能读，与公开诉求直接冲突
-- 列表查询不带 `content`，预览时按 id 单独拉取，避免大字段拖慢首屏
-- 预览把 `content` 塞进 iframe 的 `srcdoc`（sandbox 刻意不含 `allow-same-origin`，隔离风险）
+## 仓库
+- `github.com/yulechen/tranding-news`（PUBLIC，main / origin）；身份只配 repo 局部，`core.autocrlf=false`
+- 🚫 `.gitignore` 临时文件规则写 `.tmp-*`（写成 `.tmp-*/` 只匹配目录，临时文件会被 `git add -A` 提交）；
+  验规则用 `git check-ignore -v --no-index <path>`
+- ⚠️ 沙箱下 `git fetch` 写不进 `refs/remotes/origin/main`（打印 `[new branch]` 却没落盘，`status -sb` 显 `[gone]`）
+  —— **不是远端问题，远端状态一律以 `git ls-remote` / `gh api` 为准**
+- 排除项：`design/preview/*.png`（可重生成）、`inbox/*`（只留 `.gitkeep`）、`.tmp-*`、`node_modules/`
 
-## 推送链路：直接入库
-- **云 SDK 可以在 Node 里跑**：`tools/push.mjs` 用 `vm` 沙箱加载前端那份 SDK，补齐
-  `window`/`self`/`fetch`/`webcrypto`/`Headers`/`Response`/`Blob`/`FormData`/`atob`/`btoa` 等浏览器全局，
-  再用 `public/config.js` 的 `endpoint`+`publishableKey` 建客户端，**匿名身份就能读写库**。
-- 推送默认 **直接入库**（推完立刻可见），`--inbox` 才是旧的收件箱暂存模式。
-- 这条路径不需要任何长期密钥，改 SDK 版本时注意浏览器全局是否够用。
-- 🚫 **推送不写标签**（用户 2026-09-19 明确要求「推送数据不能设置标签，标签我自己维护」）：
-  `tags` 强制 `[]`；`--tags` 参数保留但忽略，只为兼容旧脚本。
-  曾因机器自动打标签，4 条内容攒出 21 个标签、19 个只用过一次，标签区被撑乱。
-  **归档只给标题 / 摘要 / 类型。**
+## 架构
+- 纯静态前端无构建（`public/` index.html + app.js + styles.css）；云 SDK 自托管 `public/vendor/`（不用 CDN）
+- `server.js` 零依赖：静态托管 + `/api/inbox`；应用自己的健康检查是 `/api/health`（`/healthz` 被平台网关占）
+- **站点公开无需登录**：`documents` 四条 RLS 全放开、`owner_id` 可空；正文 HTML 直存 `documents.content`
+  （🚫 不用云 Storage —— 必须登录才能读，与公开诉求冲突）；列表查询不带 content，预览按 id 单拉
+- 预览把 `content` 塞 iframe `srcdoc`（sandbox 不含 `allow-same-origin`）
+- 裸 REST `{endpoint}/.cloud/database/rest/<表>`；鉴权头 **`x-wb-webapp-access-key: <publishableKey>`**
+  （不是 `apikey` 也不是 `Bearer`）；POST / PATCH 要 `Prefer: return=representation`；
+  云错误码带前缀（`DATABASE_23514`），`friendly()` 用 `includes` 判断不用 `===`
+- `INGEST_KEY` 4 处：`server.js` / `push.mjs` / `selfcheck.mjs` 的 env 兜底 + `app.js` 内联明文
+  （内联在浏览器端 = 本来就公开，别当机密）
+- `messages` 表还在（留言功能已下线），自检「开放接口」组拿它当裸 REST 鉴权探针 ——
+  🚫 别改用 `documents`，那会往真实内容库写测试数据
 
-## 数据表
-- `documents`：内容归档。正文直存 `content`；列表查询不带 `content`
-- `messages`：留言板（2026-09-19 新增）。字段 `id / author / body / created_at`，
-  带 CHECK（body 非空且 ≤2000 字、author ≤40 字）；RLS 四条策略同样全放开
+## 前端口径（用户逐条定过，别自作主张回退）
+### 顶栏
+- **整条只剩一排按钮、水平居中**：`#btn-unread` 未读 · `#btn-fav` 收藏 · `#btn-api` 接口 ·
+  `#btn-refresh` 刷新；都只有图标、共用 `.fav-btn, .unread-btn` 骨架（未读蓝 / 收藏琥珀）
+- 🚫 **顶栏不再有品牌**（2026-09-21 用户要求取消站标）：云朵图标 + 「云端信息库」站名、
+  `.brand / .brand-mark / .brand-name` 全删（含 ≤900 / ≤680 两条断点规则）。居中靠
+  `.topbar { justify-content: center }`，`.topbar-actions` 不再 `margin-left: auto`；
+  自检「顶栏无品牌标识、图标整体居中」反向守着（启动动画 `.boot-mark` 没动）
+- 🚫 不显示条数（`#stat-text` 套 `.visually-hidden`，只给读屏播报；它是 absolute，不参与居中）
+- ≤680 只留图标（`.topbar-actions .btn span { display: none }`）
+- 顶栏底边那道从左淡出的蓝渐变（`.topbar::after`）**还在**，用户没要求删
 
-## 开放接口（裸 REST，实测可用）
-- 路径：`{endpoint}/.cloud/database/rest/<表名>`，例如
-  `https://info-vault.app.workbuddy.host/.cloud/database/rest/documents`
-- 鉴权头：**`x-wb-webapp-access-key: <publishableKey>`** —— 注意不是 `apikey` 也不是 `Bearer`。
-  这是拦一次真实 SDK 请求才拿到的（SDK 里是拼字符串，搜不到字面量），别凭记忆写
-- 实测：GET 列表 200；POST 写入 201 —— **必须带 `Prefer: return=representation` 才会回传新行**；
-  DELETE 204；不带密钥 401 `invalid_client`
-- 页面上的「接口」按钮（`#api-modal`）就是这份文档，端点与示例全部由 `CFG.endpoint` 拼出，
-  **不写死域名**；自检里有断言切出 `renderApiDoc` 片段检查其中不含 `http://` / `https://`
-- 🔑 云端错误码是**带前缀**的（如 `DATABASE_23514`），前端 `friendly()` 的判断要用
-  `includes` 而不是 `===`，否则错误翻译整块失效
+### 卡片 / 筛选 / 已读
+- 只有「推送时间 + 标题」+ 两个图标 `data-star` / `data-del`；🚫 眼睛（页内预览）与标签两个按钮都被要求删掉；
+  类型色条也删了（所有卡片边框一样）；骨架屏只有 `.sk-icons` + `.sk-title`
+- 筛选三者叠加：分类 × 收藏 × 未读；未读 = 不在本机 `localStorage.iv_read`（站点公开，「谁读的」无从区分）；
+  深链 `#fav` / `#unread`；分面计数先叠两个开关再按分类数（**不等于**当前列表条数，故意如此）
+- 打开即已读（`.is-read` 灰化：`--surface-2` 底 + `--ink-3` 标题；hover 恢复满对比度）；下载不算已读；
+  别的标签页读过后靠 `storage` 事件同步
+- 打开方式：**点卡片 → 当前页预览浮层**；**Shift + 点击 / Shift + 回车 → 新窗口**
+  （`window.open` 必须**同步**发 —— 先开占位窗再 `location.replace`，先 `await` 会被拦截；Enter 一律 `preventDefault`）
+- 预览页**没有顶栏**，iframe 铺满整屏，退出只认「×」+ Esc（打开时焦点落在它上面）
+  - **关闭钮：底部正中 + 裸「×」**（2026-09-21 用户连改两轮：右上角 → 顶部正中 → 底部正中，再去掉圆形底盘）
+    `position:absolute; bottom:var(--sp-3); left:50%; margin-left:-19px`；`border:0` + `background:none` +
+    无 `border-radius` / `box-shadow`；图标 22px（≤680 收到 20px、盒子 34px）
+    🚫 居中别写 `transform:translateX(-50%)` —— 会被 hover 的 `scale` 覆盖，只有 `margin-left` 稳
+  - 焦点环另给 `.preview-close:focus-visible { border-radius: var(--r-sm) }`（只剩「×」后方框环太突兀）
+  - `actOnCurrent()` **故意没有 UI 入口但留着**（「下载」「编辑信息」只在这里实现），别当死代码删
 
-## 前端顶栏（2026-09-19 起）
-- 从左到右：品牌（logo + 「云端信息库」+ `公开可看` 徽章）→ **`.topbar-status`：
-  收藏开关 `#btn-fav`（只有图标）+ 统计 `#stat-text`** → 右侧三个按钮
-- 三个按钮：**接口**（`#btn-api` → 开放接口说明弹窗）、
-  **留言**（`#btn-msg`，带条数角标 `#msg-badge` → 留言板弹窗）、**刷新**
-- 窄屏（≤680px）下按钮文字隐藏只留图标；角标保留，否则认不出哪个是留言。
-  ≤900px 隐藏 `brand-name`；≤680px 统计降到 `--fs-2xs`、收藏按钮 28px —— 360px 视口实测不溢出
-- 留言弹窗 `#msg-modal`：上半输入区（署名存 localStorage `iv_msg_author`、
-  Ctrl/⌘+Enter 发送），下半倒序列表（`#msg-list`，可删）；删除前 confirm
-- 🚫 留言板的**遮罩点击刻意不关闭**（打字时误触太烦），只认关闭按钮与 Esc
+### 分类
+- 只有三类 `report` 报告 / `watchlist` 自选 / `plan` 计划（+ 分段控件的「全部」）；🚫 旧
+  `dashboard/tool/page/other` 已停用；推送没给类型或值不在三类内 → 一律 `report`
+  （逻辑收在 `typeOf(d)` + `DEFAULT_TYPE`，**别再散着写 `|| 'other'`**）；0 条也显示
+- 逐条改分类：工具栏 `#btn-cat` → `#cat-modal`（`renderCatList` / `setDocType`），点一下即改即存
+  （乐观更新 + 失败回滚）；改完要 `renderFilters() + renderDocs()`；`paintCatRow()` 只重画那一行
 
-## 标签的维护方式
-- 标签**由用户手工维护**，这是系统里唯一的组织方式（用户 2026-09-19 要求去掉搜索与上传入口）。
-- 最主要的入口是**每张卡片右上角的标签按钮**（`data-tagedit`，在星标左侧），点开 `#tag-modal`：
-  输入框回车/逗号成词、当前标签 chip 可 ✕ 移除、下方「已有标签」池点一下加入再点移除、
-  上限 `MAX_TAGS = 12`；草稿放 `tagDraft`，点保存才落库。
-- 「编辑信息」弹窗里也有标签字段（带 `renderTagSuggest` 快捷追加）；预览页顶栏有 `data-act="tag"` 按钮。
-- 工具栏标签行是**按标签过滤**的主入口；一条标签都没有时**不隐藏**，显示引导语。
-- 公共函数：`tagCounts(list)`（按次数降序统计）、`splitTags(v)`（兼容中英文逗号与空格）。
+### 设计系统 / 无障碍
+- 数值只在 `styles.css` 顶部 `:root` token（色彩 / 间距 4 的倍数 / 7 级字阶 / 6 级圆角 / 阴影 / 动效时长），
+  规则里不写字面值；基调中性灰底 `#f4f5f7` + 顶部极淡白光，强调色只一种蓝 `--accent:#2563eb`（一屏最多两处）
+- 🚫 `:focus-visible` 焦点环是无障碍底线别删；弹窗统一 `openModal/closeModal`（焦点还原 + 计数式滚动锁 +
+  `trapFocus`）、二次确认统一 `confirmAction`（🚫 不用原生 `window.confirm`）
+- 卡片打开用 stretched link（`.card-link` + 伪元素 `inset:0`），不是 `role=button`（卡内还有按钮，ARIA 违规）；
+  `.card-actions` 需 `z-index:2`
+- 🚫 页面**没有上传入口 / 搜索 / 排序控件**（内容只从 WorkBuddy 推），排序固定最新优先（收藏不参与排序）
 
-## 分面计数规则（容易写错）
-- 类型 chip 的计数 = 「收藏 + 标签」过滤后的结果（`afterTag`）
-- 标签 pill 的计数 = 「收藏 + 类型」过滤后的结果（`afterType`）
-- 两者**都不等于**当前列表条数，这是刻意的：每个选项上的数字要代表「点进去大概有几条」
-- 选中的标签若被类型筛成 0 条，仍要留在标签行里，否则用户看不到自己卡在哪个筛选上、退不出来
-
-## 设计系统与无障碍（2026-09-19 v5「留白 · 秩序」重构后）
-- **所有数值只在 `public/styles.css` 顶部的 `:root` token 里**：色彩、间距（4 的倍数）、
-  7 级字阶（`--fs-2xs…--fs-xl` = 11/12/13/14/16/17/22）、6 级圆角、阴影、动效时长。
-  规则里不要再写字面值；改主题只动 token。
-- **视觉基调**：中性灰底（`--bg: #f4f5f7`）+ 顶部 320px 极淡白光渐隐；
-  强调色只有一种蓝 `--accent: #2563eb`，**一屏最多出现两处**。
-  🚫 别再把满屏彩色径向渐变背景加回来（v4 有，v5 刻意去掉）。
-- **类型靠左侧色条识别**：`.card::before` 是 3px 竖条，按 `.card[data-type]` 着色
-  （报告=蓝 / 看板=青 / 工具=绿 / 页面=橙），hover 变 4px。
-  `data-type` 由 app.js 渲染卡片时写入 —— **加新类型要同时补 CSS 和 `TYPE_LABEL`**。
-  因此 `.type-badge` 只剩一行浅灰小字，不再带彩色圆点（颜色信息归色条）。
-- **类型筛选是分段控件**（`.segmented` > `.seg`，浅灰轨道 + 选中项白底），
-  不是一排胶囊；收藏是独立的 `.chip-star`（琥珀色）。收藏卡**不覆盖类型色条**，
-  靠暖色描边 + 暖底 + 填充星标表达。
-- 🚫 **`:focus-visible` 焦点环是无障碍底线**，别删；文本输入类用 box-shadow 环画焦点，
-  所以单独 `outline: none`，避免双环。
-- **卡片打开方式是 stretched link**（`.card-link` + 伪元素 `inset:0`），不是给卡片加
-  `role="button" tabindex="0"`：卡内还有星标 / 标签按钮，"按钮套按钮"在 ARIA 上是违规的。
-  尺寸改动注意 `.card-actions` 的 `z-index: 2`（要压过铺满整卡的链接伪元素）。
-  因为 `.card { overflow: hidden }`，卡片焦点环只能画成 `inset` 阴影，画不到外面。
-- **弹窗一律走 `openModal/closeModal`**（焦点还原 + 计数式滚动锁 + `trapFocus` 焦点陷阱），
-  别再用 `classList.remove('is-hidden')` 裸开。
-- 🚫 **不要用原生 `window.confirm`**：统一走 `confirmAction({title,text,okText,tone})`（返回 Promise）。
-  自检里有断言挡着这两条回潮。
-- 动效要尊重 `prefers-reduced-motion`；只有 hover 才出现的元素，触屏要靠
-  `@media (hover: none)` 常显。
-
-## 项目级约束
-- 平台网关占用 `/healthz`；应用自己的健康检查是 `/api/health`
-- 🚫 **页面刻意不提供上传入口、搜索与排序控件**（用户 2026-09-19 要求）：内容只从 WorkBuddy 推过来，
-  查找全靠标签，排序固定「最新优先」（不再有下拉）。自检里「页面不含上传入口与搜索」与
-  「固定最新优先，无排序控件」两条守着，别再手痒加回去。
-- 本机 bash 没有 coreutils，脚本一律用 node 写，不要用 ls/dirname/cat
-- 每次改完代码跑 `node tools/selfcheck.mjs [--base <url>]`，**本地 29 项 / 线上 31 项**要全绿
-  （「开放接口」那组只在非 localhost 地址上执行，本地会打印跳过原因）
-- **UI 改动必须实际截图看过再交付**：`node tools/shot.mjs --out x.png --script "<JS>"`，
-  用本机 Chrome 的 CDP 无头模式，能执行一段 JS 后再截图（拍交互后的状态），零安装零依赖。
-  脚本一长就会被 shell 引号咬，改用 **`--script-file <路径>`** 从文件读
-- ⚠️ **窄屏弹窗量宽度要直接量卡片**：`.modal` 是 grid + 隐式 auto 轨道，
-  `pre` 里的长行会把轨道顶宽到视口之外（实测 500px 视口里卡片被撑成 979px），
-  而 `document.scrollWidth` 因为 fixed 定位 + overflow:auto **报不出来**。
-  移动端媒体查询里已加 `grid-template-columns: minmax(0, 1fr)` 固定单列满宽
-- ⚠️ **本机 3300 端口被 trandingos_v3（股票自选管理系统）占着，别用它起临时服务。**
-  Windows 下同一地址端口允许两个进程绑定，**先绑定的接走请求** ——
-  自己的服务日志照常打印「已启动」，但请求全被另一个进程接走（抓到的会是股票系统的页面）。
-  起临时服务挑 3517 这类冷门端口，并且**起完先 fetch 一下用特征词自证**再往下做。
-  另：那个股票服务是用户自己在跑的，**不要 kill 它**。
+## 踩坑
+- ⚠️⚠️ **同一文件在同一轮连发多个 Edit 会互相覆盖**（按旧快照并行写，只有最后一个落盘，前面几个静默丢失）
+  → 串行改，或写「带唯一命中断言」的一次性 node 脚本批量替换
+- ⚠️⚠️ **自检必须排在截图之前**：宿主批量删除守卫按整轮累计，超阈值后所有子进程的删除都被拦，
+  自检「删除条目 / 删除后读不到」两项**假红**（`err.code` 为 undefined）；`shot.mjs` 已改成复用系统临时配置
+  目录（`--fresh` 才清）；真遇假红，线上跑一遍即可确认
+- ⚠️ 本地起过服务就**一定看 `inbox/`**：自检留下的「自检内容」不清理，发布会带上线变成「待入库」
+  （已踩过一次）。**发布前清空 `inbox/`（只留 `.gitkeep`）**
+- ⚠️ 拍照脚本长了必须用 `--script-file`（否则被 shell 引号咬）；**`--w 360` 拍不出窄屏**
+  （Chrome 无头窗口有 500px 下限，截图和 `innerWidth` 都是 500）→ 用 `--vw 360 --vh 700` 设备模拟；
+  合成 `element.click()` 会让随后的 `focus()` 画出焦点环（真实鼠标用户看不到），拍照前 `blur()`；
+  焦点环有无要读 `getComputedStyle`，不能只看截图
+- ⚠️ **3300 端口被 trandingos_v3（股票自选）占着** —— 用户自己在跑，**别 kill**；Windows 允许同端口重复绑定，
+  **先绑定的接走请求**（自己的服务照常打印「已启动」，抓到的是别人的页面）→ 起临时服务挑 3517 这类冷门端口，
+  起完先 fetch 用特征词自证
+- 本机 shell 无 coreutils 且时好时坏（`tail` / `grep` / `sleep` 说没就没）→ 脚本一律用 node 写，
+  要等就用 `node -e "setTimeout(()=>{},1500)"`，输出整段打印
+- ⚠️ 后台起的 `server.js` **可能在两次 Bash 调用之间被杀**（不稳定）→ 跑自检 / 截图时把
+  「起服务 + 验证 + kill」写在**同一次** Bash 调用里，别跨调用指望它还活着
 
 ## 常用命令
-- 本地起服务：`node server.js`（默认 3000）
-- 推送内容（默认直接入库，**不带标签**）：`node tools/push.mjs --file a.html --title "标题" --summary "摘要" --type report`
-  （`--tags` 参数还在但被忽略，只为兼容旧脚本）
-- 推送内容（暂存收件箱）：加 `--inbox`
-- 自检线上：`node tools/selfcheck.mjs --base https://info-vault.app.workbuddy.host`
-- 页面截图：`node tools/shot.mjs --out shot.png [--url ...] [--script "..."] [--script-file 文件]`
-- 图标光栅化：`node tools/make-icons.mjs`
-
-## 前端功能点（避免重复实现）
-- **打开方式：点卡片默认「新窗口」**（用户 2026-09-19 要求）。页内预览降级为卡片右上角的
-  眼睛按钮（`[data-preview]` → `openPreview`）；预览浮层顶栏的「新窗口」按钮复用同一函数。
-  实现要点：`openInNewWindow` 里 **`window.open` 必须同步发** —— 先开空白占位窗 + 写入载入页，
-  正文拿到后再 `win.location.replace(blobUrl)`；先 `await` 再 `open` 会被弹窗拦截器拦掉。
-  自检里「打开方式：卡片默认新窗口」一组守着这条，含「必须同步开窗」的断言。
-- 收藏：**开关在顶栏**（`#btn-fav`，只有一个星标图标，点亮＝只看收藏），状态存 DB
-  `documents.starred`；深链 `#fav`；预览页顶栏也有收藏按钮；卡片 `is-starred` 是暖色描边
-- 🚫 **收藏不参与排序**（用户 2026-09-19 要求「点击收藏后不影响卡片排序，还是按时间顺序」）：
-  `visibleDocs()` 里只留 `byDate(b) - byDate(a)`，**不要**再加 `Number(!!b.starred) - Number(!!a.starred)`
-  那种置顶排序；自检「固定最新优先」一组有两条断言挡着
-- **卡片顶部固定四个图标**（`renderDocs` 里 `.card-actions`，顺序别乱）：
-  `[data-preview]` 页内预览 · `[data-star]` 收藏 · `[data-tagedit]` 标签 · `[data-del]` 删除。
-  删除和预览页顶栏的删除**共用 `deleteDoc(doc)`**（内含二次确认 + 焦点还原到原位置那张卡）。
-  自检「卡片操作收在卡片顶部」守着这四个 data 属性与 `.del-btn`
-- 筛选都是前端本地过滤（一次拉最多 500 条列表，不带 `content`）
-- 顶栏另有：接口说明弹窗（`#api-modal` / `renderApiDoc`）、留言板（`#msg-modal` / `openMsgBoard`）
-- 留言不参与标签与筛选体系，是独立的一张表、独立的一个弹窗
+- 起服务 `PORT=3517 node server.js`（默认 3000）
+- 自检 `node tools/selfcheck.mjs [--base <url>]` —— **本地 35 项 / 线上 37 项**全绿
+  （「开放接口」组只对非 localhost 执行，线上多 2 项）
+- 推送（默认直接入库、不带标签）`node tools/push.mjs --file a.html --title … --summary … --type report`；`--inbox` 走暂存
+- 截图 `node tools/shot.mjs --out x.png [--script-file f] [--vw/--vh]`｜图标 `node tools/make-icons.mjs`
+- 改完 `content/云端信息库-使用说明.html` 记得同步回库（id=2，REST `PATCH {content}`，回读校验）

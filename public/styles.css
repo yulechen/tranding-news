@@ -271,31 +271,6 @@ button { cursor: pointer; }
 }
 .field input::placeholder, .field textarea::placeholder { color: var(--ink-4); }
 
-/* ── 已有标签快捷追加（标签由用户自己维护，这里只做复用引导） ── */
-.tag-suggest {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: var(--sp-2);
-}
-.tag-suggest-label { font-size: var(--fs-xs); color: var(--ink-3); }
-.tag-suggest button {
-  padding: 4px 10px;
-  border-radius: var(--r-xs);
-  border: 1px dashed var(--border-strong);
-  background: var(--surface-2);
-  font-size: var(--fs-sm);
-  color: var(--ink-2);
-  transition: all var(--dur-1) var(--ease);
-}
-.tag-suggest button:hover {
-  border-style: solid;
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
 /* ═══════════ 启动屏 ═══════════ */
 
 .boot {
@@ -322,19 +297,6 @@ button { cursor: pointer; }
   50%      { transform: scale(.86); opacity: .6; }
 }
 
-/* ═══════════ 品牌标记 ═══════════ */
-
-.brand-mark {
-  width: 32px; height: 32px;
-  flex: none;
-  border-radius: 9px;
-  background: linear-gradient(140deg, var(--accent), #38bdf8);
-  color: #fff;
-  display: grid; place-items: center;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, .28);
-}
-.brand-mark svg { width: 20px; height: 20px; }
-
 /* ═══════════ 主界面 ═══════════ */
 
 .main-view { min-height: 100%; }
@@ -345,6 +307,7 @@ button { cursor: pointer; }
   height: var(--topbar-h);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--sp-4);
   padding: 0 var(--sp-6);
   background: var(--surface);
@@ -361,52 +324,32 @@ button { cursor: pointer; }
   pointer-events: none;
 }
 
-.brand { display: flex; align-items: center; gap: 10px; flex: none; }
-.brand-name { font-weight: 650; font-size: var(--fs-md); letter-spacing: -.015em; }
-
-.pub-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 21px;
-  padding: 0 9px;
-  border-radius: var(--r-xs);
-  background: var(--surface-3);
-  color: var(--ink-3);
-  font-size: var(--fs-2xs);
-  font-weight: 600;
-  letter-spacing: .03em;
-}
-
+/* 顶栏只有这一组按钮（2026-09-21 去掉品牌标识后），整组水平居中 */
 .topbar-actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: var(--sp-1);
   position: relative;
 }
 
-/* 顶栏中段：收藏视角开关（只有图标）+ 内容统计 */
-.topbar-status {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-.fav-btn {
+/* 顶栏的两个视角开关（未读 / 收藏）：只有图标、跟着右侧按钮组走、尺寸对齐 .btn 的高度。
+   骨架完全一样，只有「点亮之后的颜色」不同 —— 未读用蓝、收藏用琥珀 */
+.fav-btn, .unread-btn {
   position: relative;
-  width: 30px; height: 30px;
+  width: 38px; height: 38px;
   flex: none;
   display: grid; place-items: center;
   border: 1px solid transparent;
   background: transparent;
   border-radius: var(--r-sm);
-  color: var(--ink-4);
+  color: var(--ink-2);
   transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
               border-color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
 }
-/* 视觉 30px，热区撑到 44px */
-.fav-btn::after { content: ""; position: absolute; inset: -7px; }
-.fav-btn svg { width: 17px; height: 17px; }
+/* 视觉 38px，热区撑到 44px */
+.fav-btn::after, .unread-btn::after { content: ""; position: absolute; inset: -3px; }
+.fav-btn svg, .unread-btn svg { width: 18px; height: 18px; }
+
 .fav-btn:hover { background: var(--star-soft); color: var(--star); transform: scale(1.06); }
 .fav-btn.is-active {
   color: var(--star-ink);
@@ -414,6 +357,13 @@ button { cursor: pointer; }
   border-color: var(--star-line);
 }
 .fav-btn.is-active svg path { fill: currentColor; }
+
+.unread-btn:hover { background: var(--accent-soft); color: var(--accent); transform: scale(1.06); }
+.unread-btn.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
 
 .content {
   max-width: var(--content-max);
@@ -461,6 +411,24 @@ button { cursor: pointer; }
 
 .chips { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
 
+/* 工具栏右侧：分类编辑入口（只有图标，视觉 34px、热区撑到 44px） */
+.cat-btn {
+  position: relative;
+  margin-left: auto;
+  flex: none;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--r-md);
+  color: var(--ink-3);
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
+              border-color var(--dur-1) var(--ease);
+}
+.cat-btn::after { content: ""; position: absolute; inset: -5px; }
+.cat-btn svg { width: 17px; height: 17px; }
+.cat-btn:hover { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+
 /* 内容类型：分段控件（一个轨道里切，比散落的胶囊更清爽） */
 .segmented {
   display: inline-flex;
@@ -502,55 +470,7 @@ button { cursor: pointer; }
 }
 .seg.is-active .seg-n { color: var(--accent); }
 
-/* 顶栏里的内容统计：紧跟在「公开可看」和收藏开关后面 */
-.stat {
-  font-size: var(--fs-sm);
-  color: var(--ink-4);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── 标签行 ─────────────────────────────────────────────── */
-.tag-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: var(--sp-5);
-  padding-bottom: var(--sp-4);
-  border-bottom: 1px solid var(--border);
-}
-.tag-row-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-right: 2px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--ink-4);
-}
-.tag-row-label svg { width: 13px; height: 13px; }
-.tag-row-hint { font-size: var(--fs-sm); color: var(--ink-4); }
-
-.tag-pill {
-  height: 28px;
-  padding: 0 11px;
-  border-radius: var(--r-pill);
-  border: 1px solid transparent;
-  background: var(--surface-3);
-  font-size: var(--fs-sm);
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease),
-              border-color var(--dur-1) var(--ease);
-}
-.tag-pill:hover { background: var(--surface-4); color: var(--ink); }
-.tag-pill.is-active {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-  color: var(--accent);
-  font-weight: 600;
-}
+/* 顶栏不再显示条数（用户 2026-09-19 要求取消），条数只留给读屏播报 */
 
 /* ── 卡片网格 ───────────────────────────────────────────── */
 .grid {
@@ -580,26 +500,12 @@ button { cursor: pointer; }
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
 }
-/* 左侧一条类型色条：靠颜色认类型，比彩色徽章安静，也让每张卡有辨识度 */
-.card::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--accent);
-  transition: width var(--dur-2) var(--ease);
-}
-.card[data-type="dashboard"]::before { background: #0891b2; }
-.card[data-type="tool"]::before      { background: #059669; }
-.card[data-type="page"]::before      { background: #d97706; }
-.card[data-type="other"]::before     { background: var(--ink-4); }
-
+/* 所有卡片的边框一律一样，不按内容类型上色 */
 .card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
   border-color: var(--border-strong);
 }
-.card:hover::before { width: 4px; }
 .card:active { transform: translateY(0); }
 
 /* 卡片正文是一条铺满整卡（stretched link）的链接：
@@ -615,16 +521,44 @@ button { cursor: pointer; }
 .card-link:focus-visible { outline: none; }
 .card-link:focus-visible::after { box-shadow: inset 0 0 0 2px var(--accent); }
 
-/* 已收藏：暖色描边 + 暖底 + 填充星标；类型色条保留不动 */
+/* 已收藏：暖色描边 + 暖底 + 填充星标 */
 .card.is-starred {
   border-color: var(--star-line);
   background: linear-gradient(180deg, #fffdf8, var(--surface) 42%);
 }
 .card.is-starred:hover { border-color: #eecf9a; }
 
+/* 已读：整卡压一档灰 —— 底色变浅、标题降一档对比、操作图标收暗，
+   扫一眼就知道哪些没看过。未读的卡片保持原样（白底 + 深色标题 + 投影）。
+   已读只是"看过"、不是"禁用"：hover / 键盘聚焦时恢复满对比度。
+   标题用 --ink-3 而不是 --ink-4：后者对比度不够正文用 */
+.card.is-read {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+.card.is-read .card-title { color: var(--ink-3); font-weight: 560; }
+.card.is-read .card-actions { opacity: .62; }
+.card.is-read:hover,
+.card.is-read:focus-within {
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.card.is-read:hover .card-title,
+.card.is-read:focus-within .card-title { color: var(--ink); }
+.card.is-read:hover .card-actions,
+.card.is-read:focus-within .card-actions { opacity: 1; }
+
 .card-top { display: flex; align-items: center; gap: var(--sp-2); }
 
-/* 卡片顶部一排操作：预览 / 收藏 / 标签 / 删除
+/* 卡片左上角：推送时间（卡片上唯一的文字信息，除标题外） */
+.card-time {
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卡片顶部一排操作：收藏 / 标签 / 删除
    z-index 要压过卡片那条铺满整卡的链接，否则点不到 */
 .card-actions {
   margin-left: auto;
@@ -635,20 +569,9 @@ button { cursor: pointer; }
   z-index: 2;
 }
 
-/* 类型文字：颜色信息交给左侧色条，这里只留最轻的一行字 */
-.type-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--ink-4);
-  letter-spacing: .05em;
-}
-
 /* 视觉 28px，热区靠 ::after 撑到 44px 高（触屏再单独加大）。
    平时就带颜色、不靠 hover 才出现 —— 否则用户根本不知道卡片上能点 */
-.star-btn, .tag-btn, .pv-btn, .del-btn {
+.star-btn, .del-btn {
   position: relative;
   width: 28px; height: 28px;
   display: grid; place-items: center;
@@ -659,34 +582,19 @@ button { cursor: pointer; }
               transform var(--dur-1) var(--ease);
 }
 /* 44 × 36 的热区，跟 8px 间距正好首尾相接、互不重叠 */
-.star-btn::after, .tag-btn::after, .pv-btn::after, .del-btn::after {
+.star-btn::after, .del-btn::after {
   content: "";
   position: absolute;
   inset: -8px -4px;
 }
-.star-btn svg, .tag-btn svg, .pv-btn svg, .del-btn svg { width: 17px; height: 17px; }
+.star-btn svg, .del-btn svg { width: 17px; height: 17px; }
 
 .star-btn:hover { background: var(--star-soft); color: var(--star); transform: scale(1.08); }
 .star-btn.is-on { color: var(--star); }
 .star-btn.is-on svg path { fill: currentColor; }
 
-.tag-btn:hover { background: var(--accent-soft); color: var(--accent); transform: scale(1.08); }
-.tag-btn.is-on { color: var(--accent); background: var(--accent-soft); }
-
-/* 页内预览：中性灰 hover，不跟强调色抢戏（默认打开方式是点卡片 → 新窗口） */
-.pv-btn:hover { background: var(--surface-3); color: var(--ink); transform: scale(1.08); }
-
 /* 删除：平时跟大家一样安静，只有 hover 时才泛红 */
 .del-btn:hover { background: var(--danger-soft); color: var(--danger); transform: scale(1.08); }
-
-/* ── 预览页的收藏按钮 ── */
-.btn-star svg { width: 15px; height: 15px; color: var(--star); }
-.btn-star.is-on {
-  color: var(--star-ink);
-  background: var(--star-soft);
-  border-color: var(--star-line);
-}
-.btn-star.is-on svg path { fill: currentColor; }
 
 .card-title {
   margin: 0;
@@ -700,47 +608,8 @@ button { cursor: pointer; }
   overflow: hidden;
 }
 
-.card-summary {
-  margin: 0;
-  font-size: var(--fs-sm);
-  color: var(--ink-3);
-  line-height: 1.62;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 2.6em;
-}
-
-.card-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  min-height: 21px;
-}
-.card-tags span {
-  font-size: var(--fs-xs);
-  color: var(--ink-3);
-  background: var(--surface-3);
-  padding: 2px 8px;
-  border-radius: var(--r-xs);
-}
-.card-tags .more { color: var(--ink-4); background: transparent; padding-left: 0; }
-
-.card-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--surface-3);
-  font-size: var(--fs-xs);
-  color: var(--ink-4);
-}
-.card-foot .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border-strong); }
-.card-foot .src { margin-left: auto; }
-
-/* ── 列表骨架屏：首屏加载时先给形状，别让页面空着 ── */
+/* ── 列表骨架屏：首屏加载时先给形状，别让页面空着。
+      形状跟着卡片走 —— 一排操作图标 + 一行标题 ── */
 .skeleton-card {
   display: flex;
   flex-direction: column;
@@ -760,11 +629,9 @@ button { cursor: pointer; }
   from { background-position: 100% 0; }
   to   { background-position: 0 0; }
 }
-.sk-badge { width: 46px; height: 20px; }
+/* 骨架的形状要和真卡片对得上：右边一排图标（2 个）+ 一行标题宽度 */
+.sk-icons { width: 64px; height: 28px; margin-left: auto; }
 .sk-title { width: 74%; height: 16px; margin-top: 4px; }
-.sk-line  { width: 100%; height: 11px; }
-.sk-line.is-short { width: 58%; }
-.sk-foot  { width: 42%; height: 10px; margin-top: var(--sp-3); }
 
 /* ── 空状态 ─────────────────────────────────────────────── */
 .empty {
@@ -798,26 +665,33 @@ button { cursor: pointer; }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-.preview-bar {
-  flex: none;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 0 var(--sp-4);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+/* 关闭钮：预览没有顶栏，退出就靠这一颗。
+   悬浮在内容之上（absolute + 脱离流），不挤压预览区域。
+   2026-09-21 二次收敛：用户要求去掉圆形底盘，**只留一个「×」** ——
+   所以这里刻意没有 background / border / border-radius / box-shadow，别再往回加。
+   位置在**页面底部正中**（演变：右上角 → 顶部正中 → 底部正中）——
+   用 margin-left 抵消自身宽度来做居中，不用 transform:translateX，
+   因为 hover 的 scale 会把 translate 覆盖掉 */
+.preview-close {
+  position: absolute;
+  bottom: var(--sp-3);
+  left: 50%;
+  margin-left: -19px;
+  z-index: 3;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  transition: color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
 }
-.preview-title {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  font-size: var(--fs-base);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.preview-actions { display: flex; gap: 2px; flex: none; }
+/* 视觉 38px 的「×」，热区撑到 48px */
+.preview-close::after { content: ""; position: absolute; inset: -5px; }
+.preview-close:hover { color: var(--ink); transform: scale(1.12); }
+/* 只剩「×」了，焦点环也顺着收成圆角方形 —— 只影响键盘用户（鼠标点击不出现） */
+.preview-close:focus-visible { border-radius: var(--r-sm); outline-offset: 4px; }
+.preview-close svg { width: 22px; height: 22px; }
 
 .preview-body { flex: 1; position: relative; background: #fff; }
 #preview-frame {
@@ -897,105 +771,67 @@ button { cursor: pointer; }
 }
 .confirm-text strong { color: var(--ink); font-weight: 650; }
 
-/* ── 编辑标签 ───────────────────────────────────────────── */
-.tag-doc {
-  margin: 0 0 var(--sp-4);
-  padding: 9px var(--sp-3);
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  font-size: var(--fs-base);
-  font-weight: 600;
-  color: var(--ink-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tag-current {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  margin: -2px 0 4px;
-}
-.tag-empty { font-size: var(--fs-sm); color: var(--ink-3); }
-
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 4px 0 10px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent);
+/* ── 分类编辑 ───────────────────────────────────────────── */
+.cat-lead {
+  margin: 0 0 var(--sp-3);
   font-size: var(--fs-sm);
-  font-weight: 600;
-}
-.tag-chip button {
-  width: 18px; height: 18px;
-  display: grid; place-items: center;
-  flex: none;
-  border: none; background: none;
-  border-radius: 50%;
-  color: inherit;
-  font-size: var(--fs-xs);
-  line-height: 1;
-  opacity: .55;
-  transition: opacity var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
-}
-.tag-chip button:hover { opacity: 1; background: rgba(37, 99, 235, .16); }
-
-.tag-pool {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--border);
-}
-.tag-pool:empty { display: none; }
-.tag-pool-label {
-  width: 100%;
-  font-size: var(--fs-xs);
   color: var(--ink-3);
 }
-.tag-opt {
-  height: 28px;
-  padding: 0 var(--sp-3);
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  font-size: var(--fs-sm);
+.cat-list {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--sp-2);
+}
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cat-row:last-child { border-bottom: none; }
+.cat-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-base);
   color: var(--ink-2);
-  transition: all var(--dur-1) var(--ease);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.tag-opt:hover { border-color: var(--border-strong); background: var(--surface-2); }
-.tag-opt.is-on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, .26);
+/* 一行里的三选一，跟筛选控件同一种形态（浅灰轨道 + 选中白底） */
+.cat-seg {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
 }
-
-/* ═══════════ 顶栏角标 ═══════════ */
-
-.btn-badge {
-  margin-left: 2px;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 var(--sp-1);
-  border-radius: var(--r-pill);
-  background: var(--accent);
-  color: #fff;
-  font-size: var(--fs-2xs);
-  font-weight: 600;
-  line-height: 17px;
+.cat-opt {
+  border: none;
+  background: transparent;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  white-space: nowrap;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.cat-opt:hover { color: var(--ink); }
+.cat-opt.is-on {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 620;
+  box-shadow: var(--shadow-sm);
+}
+.cat-empty {
+  margin: var(--sp-4) 0;
   text-align: center;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-base);
+  color: var(--ink-3);
 }
 
 /* ═══════════ 开放接口说明 ═══════════ */
@@ -1068,112 +904,6 @@ button { cursor: pointer; }
   font-size: var(--fs-xs);
 }
 
-/* ═══════════ 留言板 ═══════════ */
-
-.modal-body-split {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
-}
-
-.msg-compose {
-  flex: none;
-  padding: 0 var(--sp-5) var(--sp-4);
-  border-bottom: 1px solid var(--border);
-}
-.msg-compose textarea {
-  width: 100%;
-  padding: 10px var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  font-family: inherit;
-  font-size: var(--fs-base);
-  line-height: 1.62;
-  resize: vertical;
-  outline: none;
-  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease),
-              background var(--dur-1) var(--ease);
-}
-.msg-compose textarea:focus {
-  background: var(--surface);
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
-}
-.msg-compose textarea::placeholder { color: var(--ink-4); }
-
-.msg-compose-foot {
-  display: flex;
-  gap: var(--sp-2);
-  align-items: center;
-  margin-top: var(--sp-2);
-}
-.msg-compose-foot input {
-  flex: 1;
-  min-width: 0;
-  height: 32px;
-  padding: 0 var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  outline: none;
-  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
-              box-shadow var(--dur-1) var(--ease);
-}
-.msg-compose-foot input:focus { background: var(--surface); border-color: var(--accent); box-shadow: var(--focus-ring); }
-.msg-compose-foot input::placeholder { color: var(--ink-4); }
-.msg-compose-foot .btn { flex: none; }
-.msg-compose .modal-msg { margin: var(--sp-2) 0 0; min-height: 0; }
-
-.msg-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 2px var(--sp-5) var(--sp-5);
-}
-
-.msg-item { padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
-.msg-item:last-child { border-bottom: none; }
-
-.msg-meta { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: 4px; }
-.msg-meta strong { font-size: var(--fs-base); font-weight: 620; }
-.msg-time { font-size: var(--fs-xs); color: var(--ink-4); }
-
-.msg-del {
-  margin-left: auto;
-  width: 26px; height: 26px;
-  border: none; background: none;
-  border-radius: var(--r-sm);
-  color: #b7bcc7;
-  display: grid; place-items: center;
-  opacity: 0;
-  transition: opacity var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
-              color var(--dur-1) var(--ease);
-}
-.msg-del svg { width: 13px; height: 13px; }
-.msg-item:hover .msg-del { opacity: 1; }
-/* 键盘走到这里时必须看得见，否则等于不可用 */
-.msg-del:focus-visible { opacity: 1; }
-.msg-del:hover { background: var(--danger-soft); color: var(--danger); }
-
-.msg-text {
-  margin: 0;
-  font-size: var(--fs-base);
-  line-height: 1.72;
-  color: var(--ink-2);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.msg-empty {
-  margin: var(--sp-8) 0;
-  text-align: center;
-  font-size: var(--fs-base);
-  color: var(--ink-3);
-}
-
 /* ═══════════ Toast ═══════════ */
 
 .toast {
@@ -1200,45 +930,45 @@ button { cursor: pointer; }
 
 /* ═══════════ 响应式 ═══════════ */
 
-@media (max-width: 900px) {
-  .brand-name { display: none; }
-}
-
 @media (max-width: 680px) {
   :root { --topbar-h: 58px; }
 
   .topbar { gap: var(--sp-2); padding: 0 var(--sp-3); }
   .topbar-actions { gap: 2px; }
   .topbar-actions .btn { padding: 0 9px; }
-  .topbar-actions .btn span:not(.btn-badge) { display: none; }
-  .btn-badge { margin-left: 0; }
+  .topbar-actions .btn span { display: none; }
 
   .content { padding: var(--sp-4) var(--sp-3) calc(72px + env(safe-area-inset-bottom, 0px)); }
 
-  /* 顶栏更挤：收藏开关和统计都收一档，别把右边的按钮挤掉 */
-  .topbar-status { gap: 4px; }
-  .stat { font-size: var(--fs-2xs); }
-  .fav-btn { width: 28px; height: 28px; }
+  /* 顶栏更挤：两个视角开关收一档，别把按钮挤出去 */
+  .fav-btn, .unread-btn { width: 34px; height: 34px; }
 
-  /* 类型分段控件横滑，不换行、不被压缩 */
+  /* 类型分段控件横滑，不换行、不被压缩；右边要给分类入口留出位置 */
   .toolbar { gap: 10px; }
 
   .chips {
+    flex: 1;
+    min-width: 0;
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding-bottom: 2px;
-    width: 100%;
   }
   .chips::-webkit-scrollbar { display: none; }
   .segmented { flex: none; }
 
+  /* 分类弹窗：标题占满一行，三个按钮跟在下面（挤成一条会看不清点哪个） */
+  .cat-row { flex-wrap: wrap; row-gap: 6px; }
+  .cat-title { flex: 1 1 100%; }
+  .cat-seg { margin-left: auto; }
+  .cat-opt { padding: 7px 12px; }
+
   /* 触屏上把图标按钮做到 32px，热区正好 44 高 */
   .card-actions { gap: 6px; }
-  .star-btn, .tag-btn, .pv-btn, .del-btn { width: 32px; height: 32px; }
-  .star-btn::after, .tag-btn::after, .pv-btn::after, .del-btn::after { inset: -6px -3px; }
-  .star-btn svg, .tag-btn svg, .pv-btn svg, .del-btn svg { width: 18px; height: 18px; }
+  .star-btn, .del-btn { width: 32px; height: 32px; }
+  .star-btn::after, .del-btn::after { inset: -6px -3px; }
+  .star-btn svg, .del-btn svg { width: 18px; height: 18px; }
 
   .grid { grid-template-columns: 1fr; gap: var(--sp-3); }
 
@@ -1246,10 +976,11 @@ button { cursor: pointer; }
   .inbox-actions { width: 100%; }
   .inbox-actions .btn { flex: 1; }
 
-  .preview-bar { height: auto; padding: 9px var(--sp-3); flex-wrap: wrap; gap: var(--sp-2); }
-  .preview-title { width: 100%; order: -1; font-size: var(--fs-base); }
-  .preview-actions { gap: 2px; width: 100%; overflow-x: auto; }
-  .preview-actions .btn { padding: 0 9px; font-size: var(--fs-sm); flex: none; }
+  /* 预览没有顶栏了，只剩一颗悬浮关闭钮：窄屏收小一档，
+     位置仍在页面底部正中（margin-left 是宽度的一半） */
+  .preview-close { width: 34px; height: 34px; bottom: var(--sp-3); margin-left: -17px; }
+  .preview-close::after { inset: -4px; }
+  .preview-close svg { width: 20px; height: 20px; }
 
   /* 栅格轨道固定成一列满宽：否则 pre 里的长行会把卡片顶宽到视口之外 */
   .modal { padding: 0; align-items: flex-end; grid-template-columns: minmax(0, 1fr); }
@@ -1264,11 +995,6 @@ button { cursor: pointer; }
 
   .api-field { grid-template-columns: 76px 30px 1fr; padding: var(--sp-2) 10px; }
   .api-code { font-size: var(--fs-xs); }
-}
-
-/* 触屏没有 hover：靠 hover 才出现的元素一律常显 */
-@media (hover: none) {
-  .msg-del { opacity: 1; }
 }
 
 /* 尊重系统的「减弱动态效果」 */

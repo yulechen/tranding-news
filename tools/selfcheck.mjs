@@ -5,9 +5,9 @@
  * 云端信息库 · 本地自检
  *
  * 用法： node tools/selfcheck.mjs [--base http://127.0.0.1:3000]
- * 覆盖：静态资源、顶栏入口（接口说明 / 留言板）、健康检查、
+ * 覆盖：静态资源、顶栏入口（未读过滤 / 收藏 / 接口说明）、健康检查、
  *       收件箱增删查、鉴权与路径穿越防护。
- * 其中「标签由人工维护」一项会读本地 tools/push.mjs，用来守住「推送不写标签」这条规则；
+ * 其中「标签功能已取消」一项会读本地 tools/push.mjs，用来守住「推送不写标签」这条规则；
  * 「开放接口」一组只在非 localhost 的地址上执行（/.cloud 路径由平台网关照管）。
  */
 
@@ -96,12 +96,12 @@ async function main() {
 
   await check('收藏入口已就位', async () => {
     const html = await (await fetch(`${BASE}/`)).text()
-    // 收藏开关和内容统计都在顶栏，且统计紧跟在「公开可看」后面
+    // 顶栏没有品牌了（2026-09-21），只剩居中按钮组：收藏开关紧跟「接口」左边
     const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
-    assert(html.includes('preview-star'), '预览页缺少收藏按钮')
+    assert(html.includes('id="preview-close"'), '预览页缺少退出入口（悬浮关闭钮）')
     assert(topbar.includes('id="btn-fav"'), '顶栏缺少收藏筛选按钮')
     assert(/id="btn-fav"[^>]*aria-pressed/.test(topbar), '收藏按钮缺少 aria-pressed 状态')
-    assert(topbar.includes('id="stat-text"'), '内容统计不在顶栏')
+    assert(topbar.indexOf('id="btn-fav"') < topbar.indexOf('id="btn-api"'), '收藏开关没放在「接口」左边')
     // 收藏开关只留图标，不能有汉字
     const favBtn = topbar.slice(topbar.indexOf('id="btn-fav"'))
     const favTag = favBtn.slice(0, favBtn.indexOf('</button>'))
@@ -115,18 +115,126 @@ async function main() {
     assert(css.includes('.card.is-starred'), '缺少已收藏卡片样式')
   })
 
-  await check('标签由人工维护', async () => {
-    // 页面要能「手动给每一条打标签」，并引导复用已有的词
+  await check('顶栏无品牌标识、图标整体居中', async () => {
+    // 2026-09-21 用户要求：去掉顶栏的网站标识（云朵图标 + 站名），整条只留一排图标按钮并居中。
+    // 这条是反向断言：品牌不许再长回来。
     const html = await (await fetch(`${BASE}/`)).text()
-    assert(html.includes('id="tag-input"'), '缺少标签编辑弹窗')
-    assert(html.includes('id="tag-pool"'), '标签弹窗缺少「已有标签」候选区')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
+    assert(!topbar.includes('brand'), '顶栏又长回了品牌标识')
+    assert(!css.includes('.brand'), '样式里仍留着品牌标识的规则')
+    assert(!/<h1|<img/i.test(topbar), '顶栏又挂回了网站标识')
+    // 居中：顶栏唯一的在流子元素是按钮组，靠 .topbar 的 justify-content 居中
+    assert(/\.topbar \{[^}]*justify-content: center/.test(css), '顶栏图标没有水平居中')
+    assert(!/\.topbar-actions \{[^}]*margin-left: auto/.test(css), '顶栏按钮组又被推到右边了')
+    assert(topbar.includes('class="topbar-actions"'), '顶栏按钮组丢了')
+    assert(css.includes('.topbar-actions'), '缺少顶栏按钮组样式')
+  })
+
+  await check('顶栏不显示条数（只留读屏播报）', async () => {
+    // 用户 2026-09-19 要求取消顶栏那个数字；条数只播报给读屏，视觉上不出现
+    const html = await (await fetch(`${BASE}/`)).text()
+    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
+    assert(topbar.includes('id="stat-text"'), '条数播报节点丢了（读屏会听不到列表条数）')
+    assert(!/class="stat"/.test(topbar), '顶栏又出现了可见的统计数字')
+    assert(!html.includes('topbar-status'), '顶栏又挂回了统计容器')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(!/^\.stat \{/m.test(css), '样式里仍留着顶栏统计数字的样式')
+    assert(!css.includes('.topbar-status'), '样式里仍留着顶栏统计容器')
     const js = await (await fetch(`${BASE}/app.js`)).text()
-    assert(js.includes('data-tagedit'), '卡片上缺少标签入口')
-    assert(js.includes('data-tag="'), '顶部缺少按标签过滤的按钮')
-    assert(js.includes('renderTagSuggest'), '缺少已有标签复用逻辑')
-    // 推送工具必须强制写空标签
+    assert(js.includes('renderStat'), '缺少条数播报逻辑')
+    assert(!/<span aria-hidden="true">\$\{shown\}<\/span>/.test(js), '顶栏统计又渲染回了可见数字')
+  })
+
+  await check('顶栏未读过滤', async () => {
+    // 2026-09-21 用户要求：顶栏加一个「只看未读」，跟收藏开关同一套语言
+    const html = await (await fetch(`${BASE}/`)).text()
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
+    assert(topbar.includes('id="btn-unread"'), '顶栏缺少未读过滤开关')
+    assert(/id="btn-unread"[^>]*aria-pressed/.test(topbar), '未读开关缺少 aria-pressed 状态')
+    assert(topbar.indexOf('id="btn-unread"') < topbar.indexOf('id="btn-fav"'), '未读开关没排在收藏开关前面')
+    assert(topbar.indexOf('id="btn-fav"') < topbar.indexOf('id="btn-api"'), '两个开关没放在「接口」左边')
+    // 只留图标，不许有文字
+    const btn = topbar.slice(topbar.indexOf('id="btn-unread"'))
+    assert(!btn.slice(0, btn.indexOf('</button>')).includes('<span'), '未读开关里带着文字')
+    assert(js.includes('syncUnreadBtn'), '缺少未读开关的状态同步')
+    assert(/view\.unread/.test(js), '缺少未读筛选状态')
+    assert(js.includes('!isRead(d.id)'), '未读筛选没有按已读记录反着筛')
+    assert(css.includes('.unread-btn'), '缺少未读开关样式')
+    assert(/\.fav-btn, \.unread-btn \{/.test(css), '未读开关没跟收藏开关共用同一套骨架')
+  })
+
+  await check('已读状态：打开即已读，已读卡片变灰', async () => {
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    // 只记在本机（站点公开、无登录，区分不了「谁读的」）
+    assert(/READ_KEY = 'iv_read'/.test(js), '缺少已读状态的本地存储键')
+    assert(js.includes('localStorage.setItem(READ_KEY'), '已读状态没有落到本机')
+    assert(js.includes('function markRead'), '缺少标记已读的实现')
+    assert(/const isRead = \(id\) =>/.test(js), '缺少已读判断')
+    // 卡片要带上已读标记
+    assert(/isRead\(d\.id\) \? ' is-read'/.test(js), '卡片渲染没用上已读状态')
+    // 两条打开路径（新窗口 / 页内预览）都必须标记已读
+    const newWin = js.slice(js.indexOf('async function openInNewWindow'))
+    assert(/markRead\(doc\.id\)/.test(newWin.slice(0, 500)), '新窗口打开时没标记已读')
+    const preview = js.slice(js.indexOf('async function openPreview'))
+    assert(/markRead\(doc\.id\)/.test(preview.slice(0, 400)), '页内预览时没标记已读')
+    // 已读只压视觉，不能把卡片藏起来或者禁用掉
+    assert(css.includes('.card.is-read'), '缺少已读卡片的样式')
+    assert(/\.card\.is-read \.card-title \{ color: var\(--ink-3\)/.test(css), '已读卡片标题没压灰（或用了对比度不够的色阶）')
+  })
+
+  await check('分类只有 报告 / 自选 / 计划，可逐条编辑', async () => {
+    // 2026-09-20 用户定的：分类收敛成三类，并在列表上方给一个逐条改分类的入口
+    const html = await (await fetch(`${BASE}/`)).text()
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+
+    // ① 分类就三类，旧的那套（看板 / 工具 / 页面 / 其他）不能再露头
+    const types = js.slice(js.indexOf('const TYPES = ['), js.indexOf('const TYPE_LABEL'))
+    assert(/'report'/.test(types) && /'watchlist'/.test(types) && /'plan'/.test(types), '三类分类没齐（报告 / 自选 / 计划）')
+    assert(!/'dashboard'|'tool'|'page'|'other'/.test(types), '旧分类（看板 / 工具 / 页面 / 其他）还在')
+    assert(js.includes("const DEFAULT_TYPE = 'report'"), '缺省分类不是「报告」')
+
+    // ② 入口在卡片列表上方：工具栏里、紧跟着筛选控件
+    const barStart = html.indexOf('<section class="toolbar"')
+    const toolbar = html.slice(barStart, html.indexOf('</section>', barStart))
+    assert(toolbar.includes('id="btn-cat"'), '工具栏里没有分类编辑入口')
+    assert(toolbar.indexOf('id="type-chips"') < toolbar.indexOf('id="btn-cat"'), '分类编辑入口没跟在筛选控件后面')
+
+    // ③ 弹窗里逐条改，改动写回 doc_type
+    assert(html.includes('id="cat-modal"') && html.includes('id="cat-list"'), '缺少分类编辑弹窗')
+    assert(js.includes('function renderCatList') && js.includes('function setDocType'), '缺少分类编辑的实现')
+    assert(/update\(\{ doc_type: type/.test(js), '改了分类却没写回 doc_type')
+
+    // ④ 「编辑信息」弹窗里的下拉也得只剩三项
+    const selStart = html.indexOf('id="edit-type"')
+    const sel = html.slice(selStart, html.indexOf('</select>', selStart))
+    assert(sel.includes('value="watchlist"') && sel.includes('value="plan"'), '编辑信息弹窗里的分类没更新')
+    assert(!/value="(dashboard|tool|page|other)"/.test(sel), '编辑信息弹窗里还留着旧分类')
+
+    assert(css.includes('.cat-btn'), '缺少分类编辑入口的样式')
+    assert(css.includes('.cat-opt'), '缺少分类按钮样式')
+  })
+
+  await check('标签功能已取消', async () => {
+    // 2026-09-21 用户要求：标签整个下线 —— 卡片入口、筛选行、编辑弹窗、编辑信息里的字段都不再有
+    const html = await (await fetch(`${BASE}/`)).text()
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(!html.includes('tag-modal'), '标签编辑弹窗又回来了')
+    assert(!html.includes('tag-row'), '标签筛选行又回来了')
+    assert(!html.includes('edit-tags'), '「编辑信息」里又出现标签字段')
+    assert(!js.includes('openTagEditor'), '标签编辑逻辑没删干净')
+    assert(!js.includes('data-tagedit'), '卡片上又出现标签按钮')
+    assert(!js.includes('data-tag='), '顶部又出现按标签过滤的按钮')
+    assert(!/view\.tag/.test(js), '筛选状态里又留着标签')
+    assert(!/\.tag-/.test(css), '样式里仍留着标签相关规则')
+    // 数据库那一列还在，但页面与推送都不再往里写标签内容
     const push = fs.readFileSync(new URL('../tools/push.mjs', import.meta.url), 'utf8')
-    assert(/tags:\s*\[\]/.test(push), 'push.mjs 仍会把标签写进库里')
+    assert(/tags:\s*\[\]/.test(push), 'push.mjs 又往库里写标签了')
     assert(!/payload\.tags\.slice/.test(push), 'push.mjs 仍在透传标签')
   })
 
@@ -158,17 +266,50 @@ async function main() {
   })
 
   await check('卡片操作收在卡片顶部', async () => {
-    // 预览 / 收藏 / 标签 / 删除 四个入口都长在卡片自己身上，不用先进预览页
+    // 收藏 / 标签 / 删除 三个入口长在卡片自己身上；页内预览改成 Shift + 点击卡片（不再挂眼睛图标）
     const js = await (await fetch(`${BASE}/app.js`)).text()
     assert(js.includes('class="card-actions"'), '卡片缺少顶部操作区')
-    assert(js.includes('data-preview='), '卡片缺少页内预览入口')
+    assert(!js.includes('data-preview'), '卡片上又出现了页内预览（眼睛）按钮')
+    assert(!js.includes('pv-btn'), '页内预览按钮的代码没清干净')
+    assert(js.includes('e.shiftKey') && js.includes('openPreview(doc)'), '页内预览没有保留 Shift + 点击入口')
+    // 卡片顶部左侧显示推送时间（除标题外卡片上唯一的文字）
+    assert(js.includes('class="card-time"'), '卡片缺少推送时间')
+    assert(/card-time[\s\S]{0,200}fmtTime\(/.test(js), '卡片时间没有用统一的时间格式化')
     assert(js.includes('data-star='), '卡片缺少收藏按钮')
-    assert(js.includes('data-tagedit='), '卡片缺少标签按钮')
     assert(js.includes('data-del='), '卡片缺少删除按钮')
     assert(js.includes('async function deleteDoc'), '缺少共用的删除实现')
     const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(css.includes('.card-time'), '缺少卡片时间的样式')
+    assert(!css.includes('.pv-btn'), '样式里仍留着页内预览按钮')
     assert(css.includes('.del-btn'), '缺少删除按钮样式')
     assert(/\.del-btn::after/.test(css), '删除按钮没有撑出触摸热区')
+  })
+
+  await check('界面保持精简（顶栏 / 卡片）', async () => {
+    // 用户 2026-09-19 定的调子：能省的装饰都省掉，只留内容和操作
+    const html = await (await fetch(`${BASE}/`)).text()
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+
+    // ① 顶栏不挂「公开可看」徽标
+    assert(!html.includes('pub-badge'), '顶栏又出现了「公开可看」徽标')
+    assert(!css.includes('.pub-badge'), '样式里仍留着「公开可看」徽标')
+
+    // ② 卡片边框一律一样，不按内容类型上色
+    assert(!/\.card\[data-type=/.test(css), '卡片仍在按类型上色')
+    assert(!css.includes('.card::before'), '卡片左侧那条类型色条又回来了')
+
+    // ③ 卡片只留「推送时间 + 标题」：类型徽标 / 摘要 / 标签 / 页脚都不再渲染
+    assert(!js.includes('type-badge'), '卡片又渲染了类型徽标')
+    assert(!js.includes('card-summary'), '卡片又渲染了摘要')
+    assert(!js.includes('card-tags'), '卡片又渲染了标签')
+    assert(!js.includes('card-foot'), '卡片又渲染了时间 / 大小 / 来源那一条页脚')
+    assert(/class="card-title"/.test(js), '卡片标题丢了')
+    assert(css.includes('.card-title'), '缺少卡片标题样式')
+
+    // ④ 标签相关的东西已整体下线（见「标签功能已取消」一项）
+    assert(!js.includes('tag-row-label'), '标签行又出现了「标签」字样')
+    assert(!css.includes('.tag-row-label'), '样式里仍留着标签行文字样式')
   })
 
   await check('无障碍与键盘可用', async () => {
@@ -189,16 +330,49 @@ async function main() {
     assert(css.includes('prefers-reduced-motion'), '未尊重系统的减弱动态效果')
   })
 
-  await check('打开方式：卡片默认新窗口', async () => {
+  await check('打开方式：卡片默认在当前页打开', async () => {
     const js = await (await fetch(`${BASE}/app.js`)).text()
-    assert(js.includes('openInNewWindow'), '缺少「新窗口打开」的实现')
-    // 必须**同步**先开占位窗，否则 await 拉正文之后 window.open 会被弹窗拦截器拦掉
-    assert(js.includes(`window.open('', '_blank')`), '新窗口不是同步开的，会被浏览器当弹窗拦掉')
-    assert(/data-preview=/.test(js), '卡片缺少页内预览入口')
-    // 卡片正文那一段点击处理必须落到新窗口；页内预览只留给眼睛按钮
+    // 用户 2026-09-20：点卡片默认在当前页的预览浮层里打开，不再默认新开标签页
     const at = js.indexOf("el.grid.addEventListener('click'")
-    const cardClick = js.slice(at, at + 2200)
-    assert(cardClick.includes('openInNewWindow(doc)'), '点击卡片默认不是新窗口打开')
+    assert(at > 0, '找不到卡片点击处理')
+    const cardClick = js.slice(at, at + 2600)
+    assert(cardClick.includes('openPreview(doc)'), '点击卡片默认没有在当前页打开')
+    assert(/if \(e\.shiftKey\) \{ openInNewWindow\(doc\); return \}/.test(cardClick), 'Shift + 点击没有走新窗口')
+
+    // 新窗口这条路仍然留着（Shift + 点击 / Shift + 回车），
+    // 且必须**同步**开窗，否则 await 拉正文之后 window.open 会被弹窗拦截器拦掉
+    assert(js.includes('openInNewWindow'), '「新窗口打开」的实现被删了')
+    assert(js.includes(`window.open('', '_blank')`), '新窗口不是同步开的，会被浏览器当弹窗拦掉')
+
+    // 键盘两种按法要和鼠标对齐
+    const kat = js.indexOf("el.grid.addEventListener('keydown'")
+    assert(kat > 0, '找不到卡片的键盘处理')
+    const cardKey = js.slice(kat, kat + 1200)
+    assert(cardKey.includes('if (e.shiftKey) openInNewWindow(doc)'), 'Shift + 回车没有走新窗口')
+    assert(/else openPreview\(doc\)/.test(cardKey), '回车默认没有在当前页打开')
+
+    // 卡片链接的提示文案要跟默认行为一致，别还说「新窗口打开」
+    assert(js.includes('在当前页面打开'), '卡片链接的提示文案没跟着改')
+
+    // 预览页刻意不做顶栏（2026-09-20 用户要求）：内容是主角，页面铺满。
+    // 退出只认悬浮关闭钮 + Esc，别把「返回 / 收藏 / 标签 / 新窗口 / 下载 / 编辑信息 / 删除」那一排加回来
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    const html = await (await fetch(`${BASE}/`)).text()
+    assert(!html.includes('preview-bar'), '预览页又长出了顶栏')
+    assert(!html.includes('preview-back'), '预览页又长出了「返回」按钮')
+    assert(html.includes('id="preview-close"'), '预览页缺少悬浮关闭钮')
+    assert(!css.includes('.preview-bar'), '样式里仍留着预览顶栏')
+    assert(!css.includes('.preview-actions'), '样式里仍留着预览顶栏的操作区')
+    assert(/\.preview-close \{[^}]*position: absolute/.test(css), '关闭钮没有脱离文档流（会挤压预览区域）')
+    // 关闭钮在页面底部正中（2026-09-21 用户要求；演变：右上角 → 顶部正中 → 底部正中）
+    assert(/\.preview-close \{[^}]*left: 50%/.test(css), '关闭钮没在页面底部中间')
+    assert(/\.preview-close \{[^}]*bottom: var\(--sp-[23]\)/.test(css), '关闭钮没落在页面底部')
+    assert(!/\.preview-close \{[^}]*top: /.test(css), '关闭钮又回到顶部了')
+    assert(!/\.preview-close \{[^}]*right: /.test(css), '关闭钮又贴回右上角了')
+    // 只留一个「×」（2026-09-21 用户要求）：去掉圆形底盘 —— 无描边 / 圆底 / 阴影
+    assert(!/\.preview-close \{[^}]*border-radius/.test(css), '关闭钮又长出圆形底盘了')
+    assert(/\.preview-close \{[^}]*border: 0/.test(css), '关闭钮又带上描边了')
+    assert(/\.preview-close \{[^}]*background: none/.test(css), '关闭钮又加回底色了')
   })
 
   await check('接口说明用真实端点，不写死', async () => {
@@ -220,19 +394,17 @@ async function main() {
     assert(css.includes('.api-code'), '缺少接口说明的代码块样式')
   })
 
-  await check('留言功能已就位', async () => {
+  await check('留言功能已移除', async () => {
+    // 2026-09-21 用户要求：留言板整体下线（顶栏入口、弹窗、逻辑、样式都不再出现）
     const html = await (await fetch(`${BASE}/`)).text()
-    assert(html.includes('id="msg-modal"'), '缺少留言弹窗')
-    assert(html.includes('id="msg-body"'), '缺少留言输入框')
-    assert(html.includes('id="msg-list"'), '缺少留言列表')
-    assert(html.includes('id="msg-badge"'), '顶栏缺少留言条数角标')
     const js = await (await fetch(`${BASE}/app.js`)).text()
-    assert(js.includes('openMsgBoard'), '缺少留言板逻辑')
-    assert(js.includes("from('messages')"), '留言未接云数据库 messages 表')
-    assert(js.includes('sendMessage') && js.includes('deleteMessage'), '缺少留言的发布/删除')
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    assert(css.includes('.msg-item'), '缺少留言条目样式')
-    assert(css.includes('.msg-compose'), '缺少留言输入区样式')
+    assert(!html.includes('msg-modal'), '留言弹窗又回来了')
+    assert(!html.includes('btn-msg'), '顶栏又出现留言入口')
+    assert(!html.includes('msg-badge'), '顶栏又出现留言角标')
+    assert(!js.includes('openMsgBoard'), '留言板逻辑没删干净')
+    assert(!js.includes("from('messages')"), 'app.js 仍在读写留言表')
+    assert(!/\.msg-/.test(css), '样式里仍留着留言相关规则')
   })
 
   console.log('\n健康检查')
@@ -314,7 +486,7 @@ async function main() {
       headers: { 'x-ingest-key': KEY }
     })
     const data = await res.json()
-    assert(res.ok && data.ok, '删除失败')
+    assert(res.ok && data.ok, data.error || '删除失败')
   })
 
   await check('删除后读不到', async () => {

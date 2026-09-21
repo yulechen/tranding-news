@@ -11,12 +11,18 @@
  * 用法：
  *   node tools/shot.mjs --out shot.png [--url http://127.0.0.1:3000/]
  *                       [--w 1280] [--h 800] [--scale 1]
+ *                       [--vw 360 --vh 640]              ← 真实窄屏（设备模拟），不加会被 Chrome 抬到 500px
  *                       [--script "document.querySelector('.card').click()"]
  *                       [--script-file tools/probe.js]   ← 脚本较长时用这个，免去 shell 引号地狱
- *                       [--wait 4000] [--full]
+ *                       [--wait 4000] [--full] [--fresh]
+ *
+ * 浏览器配置目录放在系统临时目录下并**跨次复用**（--fresh 可强制重建）。
+ * 刻意不在每次跑完就删：一次就是上千个文件，某些环境会因此触发宿主的批量删除守卫，
+ * 把这一轮里后续的删除全拦掉 —— 服务和自检会跟着莫名其妙地「删不掉东西」。
  */
 
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 
@@ -39,7 +45,14 @@ const WAIT = Number(arg('wait', 4000))
 const SCRIPT_FILE = arg('script-file', '')
 const SCRIPT = SCRIPT_FILE ? fs.readFileSync(SCRIPT_FILE, 'utf8') : arg('script', '')
 const FULL = flag('full')
+const FRESH = flag('fresh')
 const PORT = Number(arg('port', 9333))
+// Chrome 无头窗口宽度有下限（实测 500px），想量真实窄屏必须走设备模拟
+const EMU_W = Number(arg('vw', 0))
+const EMU_H = Number(arg('vh', H))
+
+// 复用的配置目录：省掉每次重建的开销，也避开「一次删上千个文件」的守卫问题
+const PROFILE = path.resolve(arg('profile', path.join(os.tmpdir(), 'info-vault-shot-profile')))
 
 /* ── 找浏览器 ─────────────────────────────────────────── */
 
@@ -94,12 +107,14 @@ function cdp(wsUrl) {
   return { ready, send, close: () => ws.close() }
 }
 
-async function targets() {
+async function targets(target) {
   for (let i = 0; i < 60; i += 1) {
     try {
       const res = await fetch(`http://127.0.0.1:${PORT}/json/list`)
-      const list = await res.json()
-      const page = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl)
+      const list = (await res.json()).filter((t) => t.type === 'page' && t.webSocketDebuggerUrl)
+      // 配置目录是复用的，万一残留了旧标签页，优先挑 URL 对得上的那个
+      const page = list.find((t) => target && String(t.url).startsWith(target)) ||
+        list.find((t) => /^https?:/.test(String(t.url)))
       if (page) return page
     } catch { /* 还没起来 */ }
     await sleep(250)
@@ -113,9 +128,10 @@ async function main() {
   const bin = findBrowser()
   if (!bin) throw new Error('本机没找到 Chrome / Edge')
 
-  const profile = path.resolve('.tmp-shot-profile')
+  const profile = PROFILE
   const outPath = path.resolve(OUT)
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
+  if (FRESH) { try { fs.rmSync(profile, { recursive: true, force: true }) } catch { /* 忽略 */ } }
 
   const child = spawn(bin, [
     '--headless=new',
@@ -124,6 +140,8 @@ async function main() {
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-extensions',
+    '--disable-session-crashed-bubble',
+    '--hide-crash-restore-bubble',
     `--remote-debugging-port=${PORT}`,
     `--user-data-dir=${profile}`,
     `--window-size=${W},${H}`,
@@ -132,10 +150,20 @@ async function main() {
 
   let client = null
   try {
-    const page = await targets()
+    const page = await targets(URL_)
     client = cdp(page.webSocketDebuggerUrl)
     await client.ready
     await client.send('Page.enable')
+
+    // 真机窄屏：--window-size 会被 Chrome 抬到 500px 下限，只有设备模拟能压到更窄
+    if (EMU_W) {
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: EMU_W,
+        height: EMU_H,
+        deviceScaleFactor: 1,
+        mobile: true
+      })
+    }
 
     // 页面可能还在首次加载，等它稳定
     await sleep(Math.min(WAIT, 3000))
@@ -177,7 +205,8 @@ async function main() {
     try { client && client.close() } catch { /* 忽略 */ }
     try { child.kill() } catch { /* 忽略 */ }
     await sleep(400)
-    try { fs.rmSync(profile, { recursive: true, force: true }) } catch { /* 忽略 */ }
+    // 配置目录默认留着复用，只有显式 --fresh 才清掉
+    if (FRESH) { try { fs.rmSync(profile, { recursive: true, force: true }) } catch { /* 忽略 */ } }
   }
 }
 

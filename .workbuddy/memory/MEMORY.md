@@ -126,8 +126,12 @@
 - ⚠️ **3300 端口被 trandingos_v3（股票自选）占着** —— 用户自己在跑，**别 kill**；Windows 允许同端口重复绑定，
   **先绑定的接走请求**（自己的服务照常打印「已启动」，抓到的是别人的页面）→ 起临时服务挑 3517 这类冷门端口，
   起完先 fetch 用特征词自证
-- 本机 shell 无 coreutils 且时好时坏（`tail` / `grep` / `sleep` 说没就没）→ 脚本一律用 node 写，
-  要等就用 `node -e "setTimeout(()=>{},1500)"`，输出整段打印
+- ⚠️⚠️ 本机 shell 无 coreutils 且时好时坏（`tail` / `grep` / `sleep` 说没就没）；**最坏的一次连
+  `dirname` / `ls` / `cd` 都没有**（报 `command not found`，`cd x && …` 整条 127，PowerShell 工具
+  还吞输出）→ **别在这个上面反复试错，直接换 node 绝对路径**：
+  `"/c/Users/chenq/.workbuddy/binaries/node/versions/22.22.2-3/node.exe" -e "…"`，
+  查目录用 `fs.readdirSync`、查 git 用 `execSync('git -C <repo> …')`；要等就用
+  `node -e "setTimeout(()=>{},1500)"`，输出整段打印
 - ⚠️ 后台起的 `server.js` **可能在两次 Bash 调用之间被杀**（不稳定）→ 跑自检 / 截图时把
   「起服务 + 验证 + kill」写在**同一次** Bash 调用里，别跨调用指望它还活着
 

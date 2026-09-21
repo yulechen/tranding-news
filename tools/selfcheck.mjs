@@ -5,7 +5,7 @@
  * 云端信息库 · 本地自检
  *
  * 用法： node tools/selfcheck.mjs [--base http://127.0.0.1:3000]
- * 覆盖：静态资源、底栏入口（未读过滤 / 收藏 / 接口说明）、健康检查、
+ * 覆盖：静态资源、筛选条入口（分类 / 未读）、健康检查、
  *       收件箱增删查、鉴权与路径穿越防护。
  * 其中「标签功能已取消」一项会读本地 tools/push.mjs，用来守住「推送不写标签」这条规则；
  * 「开放接口」一组只在非 localhost 的地址上执行（/.cloud 路径由平台网关照管）。
@@ -36,14 +36,14 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg || '断言失败')
 }
 
-// 底栏片段：起于底栏容器，止于它自己的收尾 —— 断言只在这段里找按钮，
-// 不会误抓到弹窗里同名的节点（弹窗在底栏之后）
-function barOf(html) {
-  const start = html.indexOf('<div class="bottombar">')
-  assert(start > -1, '页面缺少底栏容器 .bottombar')
-  const end = html.indexOf('</div>\n</div>', start)
-  assert(end > start, '底栏片段没有正常收尾')
-  return html.slice(start, end + '</div>'.length)
+// 筛选条片段：起于 <section class="toolbar">，止于它自己的收尾 ——
+// 断言只在这段里找按钮，不会误抓到弹窗里同名的节点
+function toolbarOf(html) {
+  const start = html.indexOf('<section class="toolbar"')
+  assert(start > -1, '页面缺少筛选条 .toolbar')
+  const end = html.indexOf('</section>', start)
+  assert(end > start, '筛选条片段没有正常收尾')
+  return html.slice(start, end)
 }
 
 async function waitForServer(attempts = 30) {
@@ -104,106 +104,90 @@ async function main() {
     assert(icon.includes('linearGradient'), 'favicon 缺少品牌渐变')
   })
 
-  await check('收藏入口已就位', async () => {
+  await check('收藏过滤已取消（筛选条只剩未读 + 分类编辑）', async () => {
+    // 2026-09-21 用户要求「取消收藏过滤」：筛选条上那颗星标开关整体下线。
+    // 演变链：底栏的收藏按钮 → 搬进筛选条 → 取消。卡片上的星标更早就删掉了，
+    // 所以整站现在没有任何收藏入口。
+    // ⚠️ 底层还留着（toggleStar / actOnCurrent('star') / documents.starred 字段），
+    //    跟「接口说明」「刷新」一样是「实现留着、没有入口」，别当死代码删。
     const html = await (await fetch(`${BASE}/`)).text()
-    // 底栏没有品牌了（2026-09-21），只剩居中按钮组：收藏开关紧跟「接口」左边
-    const botbar = barOf(html)
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
     assert(!html.includes('preview-close'), '详情页又长出了关闭钮')
-    assert(botbar.includes('id="btn-fav"'), '底栏缺少收藏筛选按钮')
-    assert(/id="btn-fav"[^>]*aria-pressed/.test(botbar), '收藏按钮缺少 aria-pressed 状态')
-    assert(botbar.indexOf('id="btn-fav"') < botbar.indexOf('id="btn-api"'), '收藏开关没放在「接口」左边')
-    // 收藏开关只留图标，不能有汉字
-    const favBtn = botbar.slice(botbar.indexOf('id="btn-fav"'))
-    const favTag = favBtn.slice(0, favBtn.indexOf('</button>'))
-    assert(!favTag.includes('<span'), '底栏收藏按钮里还带着文字')
-    const js = await (await fetch(`${BASE}/app.js`)).text()
-    assert(js.includes('view.starred'), '缺少收藏筛选状态')
-    assert(js.includes('writeHash'), '缺少收藏深链写入')
-    assert(js.includes('syncFavBtn'), '缺少收藏按钮状态同步')
-    const css = await (await fetch(`${BASE}/styles.css`)).text()
-    assert(css.includes('.fav-btn'), '缺少底栏收藏按钮样式')
-    assert(css.includes('.card.is-starred'), '缺少已收藏卡片样式')
+    const tool = toolbarOf(html)
+    assert(!tool.includes('id="btn-fav"'), '筛选条又长出了收藏开关')
+    assert(!tool.includes('fav-btn'), '筛选条里还留着收藏按钮')
+    assert(!css.includes('.fav-btn'), '样式里仍留着收藏开关')
+    assert(!js.includes('syncFavBtn'), 'app.js 里仍留着收藏开关的状态同步')
+    assert(!js.includes('view.starred'), 'app.js 里仍留着收藏筛选状态')
+    assert(!js.includes('#fav'), '收藏深链 #fav 没清掉')
+    // 卡片上也不许有星标（2026-09-21「取消卡片页上面的收藏」）
+    assert(!js.includes('data-star='), '卡片上又出现了收藏星标')
+    assert(!css.includes('.star-btn'), '样式里仍留着卡片星标')
   })
 
-  await check('底栏固定在视口底部、无品牌标识、图标整体居中', async () => {
-    // 2026-09-21 用户要求：去掉底栏的网站标识（云朵图标 + 站名），整条只留一排图标按钮并居中。
-    // 这条是反向断言：品牌不许再长回来。
+
+  await check('底栏已整条去掉', async () => {
+    // 2026-09-21 用户要求「取消底栏功能」：原来固定在视口底部的那条横条整体下线 ——
+    // 里面的「未读 / 收藏 / 接口 / 刷新」不再单独占一行；未读与收藏搬进筛选条，
+    // 「接口说明」和「刷新」的入口一并收掉（实现留着，只是没有入口可点）。
     const html = await (await fetch(`${BASE}/`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    const botbar = barOf(html)
-    assert(!botbar.includes('brand'), '底栏又长回了品牌标识')
-    assert(!css.includes('.brand'), '样式里仍留着品牌标识的规则')
-    assert(!/<h1|<img/i.test(botbar), '底栏又挂回了网站标识')
-    // 均分（2026-09-21 用户要求「图标平均分布底栏长度」）：按钮组由「缩成一簇、居中」
-    // 改成 flex:1 撑满底栏 + space-evenly 沿长度均分。底栏容器里唯一的在流子元素
-    // 就是按钮组，所以整组铺满 = 整条铺满。这几条是反向断言：不许倒回成一小簇。
-    assert(!/\.bottombar-actions \{[^}]*margin-left: auto/.test(css), '底栏按钮组又被推到右边了')
-    assert(/\.bottombar-actions \{[^}]*flex: 1/.test(css), '底栏按钮组没撑满底栏长度')
-    assert(/\.bottombar-actions \{[^}]*justify-content: space-evenly/.test(css), '底栏图标没有沿底栏长度均分')
-    assert(!/\.bottombar-actions \{[^}]*justify-content: center/.test(css), '底栏图标又缩回中间一簇了')
-    assert(botbar.includes('class="bottombar-actions"'), '底栏按钮组丢了')
-    assert(css.includes('.bottombar-actions'), '缺少底栏按钮组样式')
-    // 底栏：固定在视口底部、始终可见，不再是一条吸在页面上方的横条
-    const barRule = css.slice(css.indexOf('.bottombar {'), css.indexOf('.bottombar::after'))
-    assert(barRule.includes('position: fixed'), '底栏没有固定在视口上')
-    assert(/bottom: 0/.test(barRule), '底栏没有贴住视口底部')
-    // 别写成 /top: / —— 「border-top:」里也含这个片段，会假红
-    assert(!/(?<![-\w])top:/.test(barRule), '底栏还挂在页面上方')
-    assert(!barRule.includes('position: sticky'), '底栏还留着旧的吸顶定位')
-    assert(barRule.includes('border-top: 1px solid var(--border)'), '底栏缺少顶边分隔线')
-    assert(!barRule.includes('border-bottom'), '底栏还留着旧的底边线')
-    assert(barRule.includes('env(safe-area-inset-bottom'), '底栏没给 iPhone 底部安全区留空间')
-    // 内容底部要给固定底栏让位，否则最后一张卡会被压住
-    assert(/\.content \{[^}]*padding:[^;]*env\(safe-area-inset-bottom/.test(css), '内容底部没给底栏让位')
-    assert(css.includes('--bottombar-h'), '缺少底栏高度 token')
-    // 底栏高度：2026-09-21 用户要求「太高了，降到原来的 1/3」（62px → 21px，窄屏 58 → 19）。
-    // 条变薄后控件必须跟着缩，所以按钮盒子 / 图标一律从 --bottombar-h 派生 —— 这几条是
-    // 反向断言：不许再写死 38px / 34px，否则薄条会被大按钮撑破。
-    assert(/--bottombar-h: 21px/.test(css), '底栏高度没降到原来的 1/3')
-    assert(/--bottombar-h: 19px/.test(css), '窄屏底栏高度没同步降到 1/3')
-    assert(/--bottombar-ctrl:\s*calc\(var\(--bottombar-h\)/.test(css), '底栏按钮盒子没跟着高度派生')
-    assert(/--bottombar-ico:\s*calc\(var\(--bottombar-h\)/.test(css), '底栏图标尺寸没跟着高度派生')
-    assert(/\.fav-btn, \.unread-btn \{[^}]*width: var\(--bottombar-ctrl\)/.test(css), '底栏图标按钮还在写死尺寸')
-    assert(/\.bottombar-actions \.btn \{[^}]*height: var\(--bottombar-ctrl\)/.test(css), '底栏文字按钮没跟着收窄')
-    assert(!/\.fav-btn, \.unread-btn \{[^}]*38px/.test(css), '底栏按钮又长回 38px 了')
-    assert(!/\.fav-btn, \.unread-btn \{ width: 34px/.test(css), '窄屏又写死了 34px 的底栏按钮')
-    assert(!css.includes('topbar'), '样式里还留着顶栏的旧命名')
-    assert(!html.includes('topbar'), 'HTML 里还留着顶栏的旧命名')
+    assert(!html.includes('bottombar'), '页面里还有底栏的痕迹')
+    assert(!css.includes('bottombar'), '样式里仍留着底栏的规则')
+    assert(!css.includes('--bottombar'), '样式里仍留着底栏高度 token')
+    assert(!html.includes('topbar') && !css.includes('topbar'), '还留着顶栏的旧命名')
+    assert(!html.includes('id="btn-api"'), '底栏去掉后「接口」入口还留在页面上')
+    assert(!html.includes('id="btn-refresh"'), '底栏去掉后「刷新」还留在页面上')
+    // 内容底部仍要给 iPhone 安全区留白（底栏没了，这一条不能跟着没）
+    assert(/\.content \{[^}]*padding:[^;]*env\(safe-area-inset-bottom/.test(css), '内容底部没留 iPhone 安全区')
   })
 
-  await check('底栏不显示条数（只留读屏播报）', async () => {
-    // 用户 2026-09-19 要求取消底栏那个数字；条数只播报给读屏，视觉上不出现
-    const html = await (await fetch(`${BASE}/`)).text()
-    const botbar = barOf(html)
-    assert(botbar.includes('id="stat-text"'), '条数播报节点丢了（读屏会听不到列表条数）')
-    assert(!/class="stat"/.test(botbar), '底栏又出现了可见的统计数字')
-    assert(!html.includes('topbar-status'), '底栏又挂回了统计容器')
-    const css = await (await fetch(`${BASE}/styles.css`)).text()
-    assert(!/^\.stat \{/m.test(css), '样式里仍留着底栏统计数字的样式')
-    assert(!css.includes('.topbar-status'), '样式里仍留着底栏统计容器')
-    const js = await (await fetch(`${BASE}/app.js`)).text()
-    assert(js.includes('renderStat'), '缺少条数播报逻辑')
-    assert(!/<span aria-hidden="true">\$\{shown\}<\/span>/.test(js), '底栏统计又渲染回了可见数字')
-  })
 
-  await check('底栏未读过滤', async () => {
-    // 2026-09-21 用户要求：底栏加一个「只看未读」，跟收藏开关同一套语言
+  await check('筛选条右侧：未读 · 分类编辑两个入口', async () => {
+    // 2026-09-21 用户要求「底栏整条去掉」+「已读未读过滤放在编辑分类旁边」；
+    // 之后「取消收藏过滤」，这一排只剩未读 + 分类编辑两个按钮。
     const html = await (await fetch(`${BASE}/`)).text()
-    const js = await (await fetch(`${BASE}/app.js`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    const botbar = barOf(html)
-    assert(botbar.includes('id="btn-unread"'), '底栏缺少未读过滤开关')
-    assert(/id="btn-unread"[^>]*aria-pressed/.test(botbar), '未读开关缺少 aria-pressed 状态')
-    assert(botbar.indexOf('id="btn-unread"') < botbar.indexOf('id="btn-fav"'), '未读开关没排在收藏开关前面')
-    assert(botbar.indexOf('id="btn-fav"') < botbar.indexOf('id="btn-api"'), '两个开关没放在「接口」左边')
-    // 只留图标，不许有文字
-    const btn = botbar.slice(botbar.indexOf('id="btn-unread"'))
-    assert(!btn.slice(0, btn.indexOf('</button>')).includes('<span'), '未读开关里带着文字')
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const tool = toolbarOf(html)
+    assert(tool.includes('class="tool-actions"'), '筛选条缺少右侧按钮组')
+    const group = tool.slice(tool.indexOf('class="tool-actions"'))
+    assert(group.includes('id="btn-unread"'), '筛选条缺少未读过滤开关')
+    assert(/id="btn-unread"[^>]*aria-pressed/.test(group), '未读开关缺少 aria-pressed 状态')
+    assert(group.includes('id="btn-cat"'), '筛选条缺少分类编辑入口')
+    // 顺序：未读 → 分类编辑（未读过滤就贴在分类编辑旁边）
+    assert(group.indexOf('id="btn-unread"') < group.indexOf('id="btn-cat"'), '未读开关没排在分类编辑前面')
+    // 都只有图标，不许带文字
+    const unreadBtn = group.slice(group.indexOf('id="btn-unread"'))
+    assert(!unreadBtn.slice(0, unreadBtn.indexOf('</button>')).includes('<span'), '未读开关里带着文字')
+    // 按钮组靠自动外边距顶到另一头，跟左边可横滑的分段控件各占一头
+    assert(/\.tool-actions \{[^}]*margin-left: auto/.test(css), '按钮组没顶到筛选条右边')
+    assert(/\.tool-actions \{[^}]*flex: none/.test(css), '按钮组没锁住宽度（会被分段控件压扁）')
+    assert(!/\.cat-btn \{[^}]*margin-left: auto/.test(css), '分类入口还在自己往右顶（该由按钮组统一顶）')
+    // 两个按钮同一副骨架、同一档尺寸，尺寸走 --tool-btn token
+    assert(/--tool-btn: 34px/.test(css), '缺少筛选条按钮尺寸 token')
+    assert(/\.unread-btn \{[^}]*width: var\(--tool-btn\)/.test(css), '未读开关没跟分类入口同一档尺寸')
+    assert(/\.cat-btn \{[^}]*width: var\(--tool-btn\)/.test(css), '分类入口尺寸没走 token')
+    assert(!/\.unread-btn \{[^}]*38px/.test(css), '开关又长回 38px 了')
     assert(js.includes('syncUnreadBtn'), '缺少未读开关的状态同步')
     assert(/view\.unread/.test(js), '缺少未读筛选状态')
     assert(js.includes('!isRead(d.id)'), '未读筛选没有按已读记录反着筛')
-    assert(css.includes('.unread-btn'), '缺少未读开关样式')
-    assert(/\.fav-btn, \.unread-btn \{/.test(css), '未读开关没跟收藏开关共用同一套骨架')
+  })
+
+  await check('条数只播报给读屏（视觉上没有数字）', async () => {
+    // 用户 2026-09-19 要求取消那个数字；2026-09-21 底栏去掉后，播报节点搬进筛选条
+    const html = await (await fetch(`${BASE}/`)).text()
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    const js = await (await fetch(`${BASE}/app.js`)).text()
+    const tool = toolbarOf(html)
+    assert(tool.includes('id="stat-text"'), '条数播报节点丢了（读屏会听不到列表条数）')
+    assert(/<span class="visually-hidden" id="stat-text"/.test(tool), '条数节点不再是无障碍隐藏的')
+    assert(!/class="stat"/.test(tool), '筛选条里出现了可见的统计数字')
+    assert(!/^\.stat \{/m.test(css), '样式里仍留着统计数字的样式')
+    assert(!css.includes('.topbar-status'), '样式里仍留着统计容器')
+    assert(js.includes('renderStat'), '缺少条数播报逻辑')
+    assert(!/<span aria-hidden="true">\$\{shown\}<\/span>/.test(js), '统计又渲染回了可见数字')
   })
 
   await check('已读状态：打开即已读，已读卡片变灰', async () => {
@@ -225,7 +209,16 @@ async function main() {
     // 已读只压视觉，不能把卡片藏起来或者禁用掉
     assert(css.includes('.card.is-read'), '缺少已读卡片的样式')
     assert(/\.card\.is-read \.card-title \{ color: var\(--ink-3\)/.test(css), '已读卡片标题没压灰（或用了对比度不够的色阶）')
+    // ⚠️ 已读之后 hover / 聚焦不许再恢复白底：2026-09-21 报过的 bug ——
+    // 点完卡片鼠标还停在上面（焦点也还留在链接上），卡片那一瞬又变回白底 + 投影，
+    // 看起来就是「刚变成已读、又变回未读」。只允许换描边色当「可点」提示。
+    const hoverRule = css.slice(css.indexOf('.card.is-read:hover'), css.indexOf('}', css.indexOf('.card.is-read:hover')))
+    assert(/\.card\.is-read:hover,\s*\n\.card\.is-read:focus-within \{/.test(css), '已读卡片的 hover / 聚焦规则丢了')
+    assert(!hoverRule.includes('background'), '已读卡片 hover 又变回白底（会被看成「又变未读」）')
+    assert(!hoverRule.includes('box-shadow'), '已读卡片 hover 又加回投影了')
+    assert(!/\.card\.is-read:hover \.card-title[\s\S]{0,80}color: var\(--ink\)/.test(css), '已读卡片 hover 标题又提回深色了')
   })
+
 
   await check('分类只有 报告 / 自选 / 计划，可逐条编辑', async () => {
     // 2026-09-20 用户定的：分类收敛成三类，并在列表上方给一个逐条改分类的入口
@@ -307,7 +300,7 @@ async function main() {
   })
 
   await check('卡片操作收在卡片顶部', async () => {
-    // 收藏 / 标签 / 删除 三个入口长在卡片自己身上；页内预览改成 Shift + 点击卡片（不再挂眼睛图标）
+    // 卡片自己身上只留「删除」；页内预览改成 Shift + 点击卡片（不再挂眼睛图标）
     const js = await (await fetch(`${BASE}/app.js`)).text()
     assert(js.includes('class="card-actions"'), '卡片缺少顶部操作区')
     assert(!js.includes('data-preview'), '卡片上又出现了页内预览（眼睛）按钮')
@@ -317,7 +310,9 @@ async function main() {
     // 卡片顶部左侧显示推送时间（除标题外卡片上唯一的文字）
     assert(js.includes('class="card-time"'), '卡片缺少推送时间')
     assert(/card-time[\s\S]{0,200}fmtTime\(/.test(js), '卡片时间没有用统一的时间格式化')
-    assert(js.includes('data-star='), '卡片缺少收藏按钮')
+    // 2026-09-21 用户要求「取消卡片页上面的收藏」：卡片顶部只剩删除
+    assert(!js.includes('data-star='), '卡片上又出现了收藏星标')
+    assert(/card-actions[\s\S]{0,400}data-del=/.test(js), '删除按钮没在卡片顶部操作区')
     assert(js.includes('data-del='), '卡片缺少删除按钮')
     assert(js.includes('async function deleteDoc'), '缺少共用的删除实现')
     const css = await (await fetch(`${BASE}/styles.css`)).text()
@@ -327,14 +322,14 @@ async function main() {
     assert(/\.del-btn::after/.test(css), '删除按钮没有撑出触摸热区')
   })
 
-  await check('界面保持精简（底栏 / 卡片）', async () => {
+  await check('界面保持精简（筛选条 / 卡片）', async () => {
     // 用户 2026-09-19 定的调子：能省的装饰都省掉，只留内容和操作
     const html = await (await fetch(`${BASE}/`)).text()
     const js = await (await fetch(`${BASE}/app.js`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
 
-    // ① 底栏不挂「公开可看」徽标
-    assert(!html.includes('pub-badge'), '底栏又出现了「公开可看」徽标')
+    // ① 不挂「公开可看」徽标
+    assert(!html.includes('pub-badge'), '又出现了「公开可看」徽标')
     assert(!css.includes('.pub-badge'), '样式里仍留着「公开可看」徽标')
 
     // ② 卡片边框一律一样，不按内容类型上色
@@ -431,6 +426,28 @@ async function main() {
     const js = await (await fetch(`${BASE}/app.js`)).text()
     assert(js.includes('renderDocPage(DOC_ROUTE)'), '启动时没有按地址分流出详情页')
     assert(js.includes('classList.add(\'is-doc\')'), '详情页没收起列表那一块')
+
+    // ⚠️⚠️ 详情页里 iframe 的 srcdoc 只在**正文到手之后**赋一次。
+    // 早前是先塞一个「正在载入…」的 srcdoc 占位页、正文回来再赋一次 —— 每多赋一次
+    // 就往浏览器**联合历史**里多记一条，详情页的历史成了 [列表, 详情, 详情]，
+    // 用户按一次返回只是回到「同一条详情」，得按两次才回得到列表。
+    // 实测（Chrome 无头 + Page.getNavigationHistory）：给已有 iframe 赋一次不动历史，
+    // 连赋两次 history.length 1 → 3；页面级导航事件里主框架其实只跳了一次。
+    // 所以「正在载入」改成画在自己 DOM 上的 .is-loading，不往 iframe 里塞占位页。
+    const start = js.indexOf('async function renderDocPage')
+    const render = js.slice(start, js.indexOf('function leaveDoc', start))
+    assert(render.length > 300, '定位不到 renderDocPage 的实现')
+    const fetchAt = render.indexOf('await fetchDoc')
+    assert(fetchAt > 0, '详情页没按 id 拉正文了？')
+    const assigns = (render.match(/\.srcdoc\s*=/g) || []).length
+    assert(assigns === 1, `详情页里 srcdoc 赋了 ${assigns} 次（只该 1 次，多赋一次就多一条历史，返回要多按一次）`)
+    assert(render.indexOf('.srcdoc =') > fetchAt, '在正文到手之前就给 iframe 赋了 srcdoc（占位页会多记一条历史）')
+    assert(/currentHtml \|\| previewShell/.test(render), '正文为空时没有兜底内容')
+    assert(/catch \(err\) \{[\s\S]*previewShell\(/.test(render), '载入失败时没有兜底内容')
+    const css = await (await fetch(`${BASE}/styles.css`)).text()
+    assert(render.includes("classList.add('is-loading')"), '载入占位没画在自己的 DOM 上')
+    assert(/\.srcdoc = html[\s\S]*classList\.remove\('is-loading'\)/.test(render), '赋完正文没有撤掉载入占位')
+    assert(/\.preview\.is-loading \.preview-body::after/.test(css), '缺少载入占位的样式')
   })
 
   await check('接口说明用真实端点，不写死', async () => {

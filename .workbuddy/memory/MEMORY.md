@@ -79,6 +79,12 @@
   关闭钮也走完 右上角圆钮 → 顶部正中 → 底部正中裸「×」→ **彻底删掉**）。
   iframe 铺满整屏、列表整块 `display:none`；退出只认 **Esc / 浏览器后退**：
   从列表点进来的 `history.back()`（筛选还在），直接打开地址的回 `/`（判据：`document.referrer` 同源）
+- ⚠️⚠️ **详情页里 `iframe.srcdoc` 只准赋一次**（2026-09-21 修「返回要按两次」那个坑）：
+  多赋一次就往浏览器**联合历史**里多记一条 → 历史成 `[列表, 详情, 详情]`，按一次返回只回到
+  「同一条详情」，用户得按两次才回得到列表。实测 `history.length`：给已有 iframe 赋一次**不变**，
+  连赋两次 `1 → 3`；而 `Page.frameNavigated` 里主框架其实只跳了一次（所以从导航事件看不出问题）。
+  → 「正在载入」画在自己 DOM 上（`.preview.is-loading .preview-body::after`），正文与失败兜底
+  都先在本地拼好、最后统一赋一次；自检守着「`srcdoc` 赋值次数 === 1 且发生在 `await fetchDoc` 之后」
 - 🚫 已删：`openPreview()`（页内浮层）、`windowShell()`（blob 占位窗）、`#preview-close` 整个按钮
   （DOM + `el.previewClose` + 点击绑定 + 全部 `.preview-close` 样式）—— 别当"丢了"补回来
   - 替代的焦点落点：`#preview` 带 `tabindex="-1"`，脚本 `el.preview.focus()` 把焦点移进去，

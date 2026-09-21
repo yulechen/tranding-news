@@ -21,8 +21,8 @@
 
   /* 已读状态：站点公开、没有登录，所以「谁读的」无从区分，只记在本机浏览器里。
      存的是一组内容 id —— 读过就变灰；新推的内容 id 不在集合里，天然是未读。
-     顶栏的「只看未读」就是拿这个集合反着筛。
-     （顶栏不再显示条数，已读/未读全靠卡片底色区分。） */
+     筛选条上的「只看未读」就是拿这个集合反着筛。
+     （不再显示条数，已读/未读全靠卡片底色区分。） */
   const READ_KEY = 'iv_read'
 
   const TYPES = [
@@ -51,9 +51,6 @@
     boot: $('#boot'),
     mainView: $('#main-view'),
 
-    btnRefresh: $('#btn-refresh'),
-    btnApi: $('#btn-api'),
-    btnFav: $('#btn-fav'),
     btnUnread: $('#btn-unread'),
 
     inboxBar: $('#inbox-bar'),
@@ -115,7 +112,7 @@
   let readIds = new Set()     // 已读的内容 id（本机 localStorage）
 
   // 三个筛选条件互相叠加：分类 / 只看收藏 / 只看未读
-  const view = { type: 'all', starred: false, unread: false }
+  const view = { type: 'all', unread: false }
 
   /* 详情页路由（2026-09-21 用户要求：点卡片「换地址打开」，不再用页内浮层）。
      真地址 = /doc/<id>，由 server.js 交给本页渲染 —— 地址栏里是真的地址，
@@ -325,7 +322,6 @@
     if (loading) return
     loading = true
     el.grid.setAttribute('aria-busy', 'true')
-    if (showToast) setBusy(el.btnRefresh, true)
     if (!docs.length) renderSkeleton()
     try {
       const { data, error } = await cloud.database
@@ -349,7 +345,6 @@
     } finally {
       loading = false
       el.grid.setAttribute('aria-busy', 'false')
-      setBusy(el.btnRefresh, false)
     }
   }
 
@@ -357,7 +352,6 @@
     let list = docs.slice()
 
     if (view.type !== 'all') list = list.filter((d) => typeOf(d) === view.type)
-    if (view.starred) list = list.filter((d) => !!d.starred)
     if (view.unread) list = list.filter((d) => !isRead(d.id))
 
     // 固定排序：只按时间倒序（最新优先）。
@@ -368,18 +362,13 @@
   }
 
   function renderFilters() {
-    // 两个视角开关（收藏 / 未读）先叠上，分类计数按叠完之后的结果算。
+    // 未读开关先叠上，分类计数按叠完之后的结果算。
     // 这样每个选项上的数字就是「点进去大概有几条」，不会点出一片空白。
     let after = docs
-    if (view.starred) after = after.filter((d) => !!d.starred)
     if (view.unread) after = after.filter((d) => !isRead(d.id))
 
-    const starredN = docs.filter((d) => !!d.starred).length
-    const unreadN = docs.filter((d) => !isRead(d.id)).length
-
-    // 两个开关都在顶栏（只有图标），这里只同步它们的状态
-    syncFavBtn(starredN)
-    syncUnreadBtn(unreadN)
+    // 开关在筛选条右侧（只有图标），这里只同步它的状态
+    syncUnreadBtn(docs.filter((d) => !isRead(d.id)).length)
 
     const counts = { all: after.length }
     TYPE_KEYS.forEach((k) => {
@@ -396,18 +385,7 @@
     el.typeChips.innerHTML = `<div class="segmented" role="group" aria-label="按分类筛选">${segs}</div>`
   }
 
-  /** 同步顶栏收藏开关的状态：只有一个图标，开没开全靠颜色和填充表达 */
-  function syncFavBtn(starredN) {
-    if (!el.btnFav) return
-    const on = view.starred
-    el.btnFav.classList.toggle('is-active', on)
-    el.btnFav.setAttribute('aria-pressed', on ? 'true' : 'false')
-    const hint = starredN ? `共 ${starredN} 条收藏` : '还没有收藏'
-    el.btnFav.title = on ? `${hint} · 点击看全部` : `只看收藏（${hint}）`
-    el.btnFav.setAttribute('aria-label', on ? '正在只看收藏，点击看全部内容' : '只看收藏')
-  }
-
-  /** 同步顶栏「只看未读」开关：跟收藏开关同一套，点亮用蓝色（收藏是琥珀） */
+  /** 同步筛选条上「只看未读」开关：只有图标，开没开全靠颜色和填充表达 */
   function syncUnreadBtn(unreadN) {
     if (!el.btnUnread) return
     const on = view.unread
@@ -418,7 +396,7 @@
     el.btnUnread.setAttribute('aria-label', on ? '正在只看未读，点击看全部内容' : '只看未读')
   }
 
-  /** 条数不再显示在顶栏（用户 2026-09-19 要求取消），只留给读屏播报 */
+  /** 条数不显示（用户 2026-09-19 要求取消），只留给读屏播报 */
   function renderStat(list) {
     if (!el.statText) return
     if (!docs.length) {
@@ -513,13 +491,6 @@
           : '新推过来的内容会自动出现在这里；读过的会变灰，并离开这个列表。'
         return
       }
-      if (view.starred) {
-        el.emptyTitle.textContent = filtering ? '收藏里没有匹配的内容' : '收藏夹是空的'
-        el.emptyDesc.textContent = filtering
-          ? '换个分类，或点「全部」看看全部收藏。'
-          : '点卡片右上角的星标就能收藏；收藏的内容会集中到这里，随时能翻出来。'
-        return
-      }
       el.emptyTitle.textContent = filtering ? '没有匹配的内容' : '还是空的'
       el.emptyDesc.textContent = filtering
         ? '换个分类，或点「全部」看看所有内容。'
@@ -543,9 +514,6 @@
         <div class="card-top">
           <time class="card-time" datetime="${escapeHtml(d.created_at || '')}" title="推送于 ${escapeHtml(fmtTime(d.created_at))}">${escapeHtml(fmtTime(d.created_at))}</time>
           <div class="card-actions">
-            <button type="button" class="star-btn${d.starred ? ' is-on' : ''}" data-star="${d.id}" title="${d.starred ? '取消收藏' : '收藏'}" aria-label="${d.starred ? '取消收藏' : '收藏'}《${title}》" aria-pressed="${d.starred ? 'true' : 'false'}">
-              ${starSvg(!!d.starred)}
-            </button>
             <button type="button" class="del-btn" data-del="${d.id}" title="删除" aria-label="删除《${title}》">
               ${delSvg}
             </button>
@@ -591,22 +559,33 @@
     el.boot.classList.add('is-hidden')
     el.mainView.classList.add('is-hidden')
     el.preview.classList.remove('is-hidden')
-    el.previewFrame.srcdoc = previewShell('正在载入…')
+    // ⚠️⚠️ 这一页只在最后给 iframe 的 srcdoc 赋**一次**值。
+    // 早前是先塞一个「正在载入…」的 srcdoc 占位页、正文回来再赋一次 —— 每多赋一次
+    // 就往浏览器**联合历史**里多记一条，详情页的历史成了 [列表, 详情, 详情]，
+    // 用户按一次返回只是回到「同一条详情」，得按两次才回得到列表。
+    // 实测：给已有 iframe 赋一次 history.length 不动，连赋两次 1 → 3。
+    // 所以「正在载入」用我们自己 DOM 上的 .is-loading 画，不往 iframe 里塞占位页；
+    // 正文和失败兜底也先在本地拼好，最后统一赋一次。
+    el.preview.classList.add('is-loading')
     lockScroll()
     // 页面上没有退出控件了，所以把焦点移进这一块：读屏能立刻念出「内容详情」，
     // 键盘用户也不用先穿过整个 iframe 才找到落脚点（Esc / 浏览器后退随时能退）
     setTimeout(() => el.preview.focus(), 40)
 
+    let html = ''
     try {
       const doc = await fetchDoc(id)
       current = doc
       currentHtml = String(doc.content || '')
-      el.previewFrame.srcdoc = currentHtml || previewShell('这条内容是空的')
+      html = currentHtml || previewShell('这条内容是空的')
       document.title = (doc.title ? doc.title + ' · ' : '') + '云端信息库'
       markRead(id)
     } catch (err) {
-      el.previewFrame.srcdoc = previewShell(`<b>内容载入失败</b>${escapeHtml(friendly(err))}`)
+      html = previewShell(`<b>内容载入失败</b>${escapeHtml(friendly(err))}`)
     }
+
+    el.previewFrame.srcdoc = html
+    el.preview.classList.remove('is-loading')
   }
 
   /**
@@ -666,14 +645,16 @@
   /**
    * 详情页里的操作分发。
    *
-   * ⚠️ 没有 UI 调用入口（2026-09-20 用户要求去掉整条顶栏，2026-09-21 又改成真页面）。
-   * 保留它是因为「下载」和「编辑信息」只在这里有实现 —— 收藏 / 删除 / 新窗口在卡片和
-   * Shift + 点击上都还能用，唯独这两个暂时没地方可点。等定了新入口再接回来。
+   * ⚠️ 没有 UI 调用入口（2026-09-20 去掉整条顶栏 → 2026-09-21 详情页改成真页面 →
+   * 卡片上的收藏星标、筛选条上的收藏开关都按用户要求去掉了）。保留它是因为
+   * 「下载」「编辑信息」「收藏」都只在这里有实现 —— 删除与新窗口在卡片和
+   * Shift + 点击上还能用。等定了入口再接回来。
    */
   async function actOnCurrent(act) {
     const doc = current
     if (!doc) return
 
+    // 界面上已经没有收藏入口了，但这条分支留着 —— 它是 toggleStar 唯一的调用方
     if (act === 'star') {
       await toggleStar(doc.id)
       return
@@ -971,7 +952,10 @@
     }
   }
 
-  /* ═══════════════ 收藏 ═══════════════ */
+  /* ═══════════════ 收藏 ═══════════════
+     界面上已经没有入口了（2026-09-21 用户要求「取消卡片页上面的收藏」+「取消收藏过滤」），
+     留着是因为 actOnCurrent('star') 还挂着它；documents.starred 字段一并在库里保留。 */
+
 
   async function toggleStar(id) {
     const doc = docs.find((d) => String(d.id) === String(id))
@@ -994,19 +978,18 @@
   }
 
   /* ═══════════════ 视角深链 ═══════════════
-     地址栏带 #fav / #unread 时直接进对应视角，方便存成书签一步到达。 */
+     地址栏带 #unread 时直接进未读视角，方便存成书签一步到达。 */
 
   function readHash() {
     const h = decodeURIComponent(String(location.hash || '')).replace(/^#/, '').trim().toLowerCase()
     return {
-      starred: h === 'fav' || h === 'starred' || h === '收藏',
       unread: h === 'unread' || h === '未读'
     }
   }
 
   function writeHash() {
     const clean = location.pathname + location.search
-    const next = view.unread ? '#unread' : view.starred ? '#fav' : ''
+    const next = view.unread ? '#unread' : ''
     if (next && location.hash !== next) history.replaceState(null, '', clean + next)
     else if (!next && location.hash) history.replaceState(null, '', clean)
   }
@@ -1106,22 +1089,19 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
   /* ═══════════════ 事件绑定 ═══════════════ */
 
   function bindEvents() {
-    el.btnRefresh.addEventListener('click', () => loadDocs(true))
-
-    // 顶栏：接口说明
-    el.btnApi.addEventListener('click', openApiDoc)
+    // 接口说明弹窗：2026-09-21 底栏整条去掉后暂时没有入口（实现与文档都留着，
+    // 里面的端点 / 密钥 / 示例仍然是查接口的地方），要入口随时接回来。
     el.apiClose.addEventListener('click', closeApiDoc)
     el.apiOk.addEventListener('click', closeApiDoc)
     el.apiCopy.addEventListener('click', copyApiUrl)
 
-    // 顶栏两个视角开关（都只有图标）。收藏和未读可以叠加，互不排斥
+    // 筛选条右侧只剩「只看未读」一个视角开关（只有图标）
     const toggleView = (key) => {
       view[key] = !view[key]
       writeHash()
       renderFilters()
       renderDocs()
     }
-    if (el.btnFav) el.btnFav.addEventListener('click', () => toggleView('starred'))
     if (el.btnUnread) el.btnUnread.addEventListener('click', () => toggleView('unread'))
 
     el.typeChips.addEventListener('click', (e) => {
@@ -1133,12 +1113,6 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
     })
 
     el.grid.addEventListener('click', (e) => {
-      const star = e.target.closest('[data-star]')
-      if (star) {
-        e.stopPropagation()
-        toggleStar(star.dataset.star)
-        return
-      }
       const del = e.target.closest('[data-del]')
       if (del) {
         e.stopPropagation()
@@ -1192,8 +1166,7 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
 
     window.addEventListener('hashchange', () => {
       const next = readHash()
-      if (next.starred === view.starred && next.unread === view.unread) return
-      view.starred = next.starred
+      if (next.unread === view.unread) return
       view.unread = next.unread
       renderFilters()
       renderDocs()
@@ -1224,14 +1197,13 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
       return
     }
 
-    // 详情页：只渲染这一条正文，列表和底栏都不加载（也少一次列表请求）
+    // 详情页：只渲染这一条正文，列表那一块不加载（也少一次列表请求）
     if (DOC_ROUTE) {
       renderDocPage(DOC_ROUTE)
       return
     }
 
     const hash = readHash()
-    view.starred = hash.starred
     view.unread = hash.unread
 
     el.boot.classList.add('is-hidden')

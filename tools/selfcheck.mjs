@@ -5,7 +5,7 @@
  * 云端信息库 · 本地自检
  *
  * 用法： node tools/selfcheck.mjs [--base http://127.0.0.1:3000]
- * 覆盖：静态资源、顶栏入口（未读过滤 / 收藏 / 接口说明）、健康检查、
+ * 覆盖：静态资源、底栏入口（未读过滤 / 收藏 / 接口说明）、健康检查、
  *       收件箱增删查、鉴权与路径穿越防护。
  * 其中「标签功能已取消」一项会读本地 tools/push.mjs，用来守住「推送不写标签」这条规则；
  * 「开放接口」一组只在非 localhost 的地址上执行（/.cloud 路径由平台网关照管）。
@@ -34,6 +34,16 @@ async function check(name, fn) {
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg || '断言失败')
+}
+
+// 底栏片段：起于底栏容器，止于它自己的收尾 —— 断言只在这段里找按钮，
+// 不会误抓到弹窗里同名的节点（弹窗在底栏之后）
+function barOf(html) {
+  const start = html.indexOf('<div class="bottombar">')
+  assert(start > -1, '页面缺少底栏容器 .bottombar')
+  const end = html.indexOf('</div>\n</div>', start)
+  assert(end > start, '底栏片段没有正常收尾')
+  return html.slice(start, end + '</div>'.length)
 }
 
 async function waitForServer(attempts = 30) {
@@ -96,68 +106,98 @@ async function main() {
 
   await check('收藏入口已就位', async () => {
     const html = await (await fetch(`${BASE}/`)).text()
-    // 顶栏没有品牌了（2026-09-21），只剩居中按钮组：收藏开关紧跟「接口」左边
-    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
+    // 底栏没有品牌了（2026-09-21），只剩居中按钮组：收藏开关紧跟「接口」左边
+    const botbar = barOf(html)
     assert(html.includes('id="preview-close"'), '预览页缺少退出入口（悬浮关闭钮）')
-    assert(topbar.includes('id="btn-fav"'), '顶栏缺少收藏筛选按钮')
-    assert(/id="btn-fav"[^>]*aria-pressed/.test(topbar), '收藏按钮缺少 aria-pressed 状态')
-    assert(topbar.indexOf('id="btn-fav"') < topbar.indexOf('id="btn-api"'), '收藏开关没放在「接口」左边')
+    assert(botbar.includes('id="btn-fav"'), '底栏缺少收藏筛选按钮')
+    assert(/id="btn-fav"[^>]*aria-pressed/.test(botbar), '收藏按钮缺少 aria-pressed 状态')
+    assert(botbar.indexOf('id="btn-fav"') < botbar.indexOf('id="btn-api"'), '收藏开关没放在「接口」左边')
     // 收藏开关只留图标，不能有汉字
-    const favBtn = topbar.slice(topbar.indexOf('id="btn-fav"'))
+    const favBtn = botbar.slice(botbar.indexOf('id="btn-fav"'))
     const favTag = favBtn.slice(0, favBtn.indexOf('</button>'))
-    assert(!favTag.includes('<span'), '顶栏收藏按钮里还带着文字')
+    assert(!favTag.includes('<span'), '底栏收藏按钮里还带着文字')
     const js = await (await fetch(`${BASE}/app.js`)).text()
     assert(js.includes('view.starred'), '缺少收藏筛选状态')
     assert(js.includes('writeHash'), '缺少收藏深链写入')
     assert(js.includes('syncFavBtn'), '缺少收藏按钮状态同步')
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    assert(css.includes('.fav-btn'), '缺少顶栏收藏按钮样式')
+    assert(css.includes('.fav-btn'), '缺少底栏收藏按钮样式')
     assert(css.includes('.card.is-starred'), '缺少已收藏卡片样式')
   })
 
-  await check('顶栏无品牌标识、图标整体居中', async () => {
-    // 2026-09-21 用户要求：去掉顶栏的网站标识（云朵图标 + 站名），整条只留一排图标按钮并居中。
+  await check('底栏固定在视口底部、无品牌标识、图标整体居中', async () => {
+    // 2026-09-21 用户要求：去掉底栏的网站标识（云朵图标 + 站名），整条只留一排图标按钮并居中。
     // 这条是反向断言：品牌不许再长回来。
     const html = await (await fetch(`${BASE}/`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
-    assert(!topbar.includes('brand'), '顶栏又长回了品牌标识')
+    const botbar = barOf(html)
+    assert(!botbar.includes('brand'), '底栏又长回了品牌标识')
     assert(!css.includes('.brand'), '样式里仍留着品牌标识的规则')
-    assert(!/<h1|<img/i.test(topbar), '顶栏又挂回了网站标识')
-    // 居中：顶栏唯一的在流子元素是按钮组，靠 .topbar 的 justify-content 居中
-    assert(/\.topbar \{[^}]*justify-content: center/.test(css), '顶栏图标没有水平居中')
-    assert(!/\.topbar-actions \{[^}]*margin-left: auto/.test(css), '顶栏按钮组又被推到右边了')
-    assert(topbar.includes('class="topbar-actions"'), '顶栏按钮组丢了')
-    assert(css.includes('.topbar-actions'), '缺少顶栏按钮组样式')
+    assert(!/<h1|<img/i.test(botbar), '底栏又挂回了网站标识')
+    // 均分（2026-09-21 用户要求「图标平均分布底栏长度」）：按钮组由「缩成一簇、居中」
+    // 改成 flex:1 撑满底栏 + space-evenly 沿长度均分。底栏容器里唯一的在流子元素
+    // 就是按钮组，所以整组铺满 = 整条铺满。这几条是反向断言：不许倒回成一小簇。
+    assert(!/\.bottombar-actions \{[^}]*margin-left: auto/.test(css), '底栏按钮组又被推到右边了')
+    assert(/\.bottombar-actions \{[^}]*flex: 1/.test(css), '底栏按钮组没撑满底栏长度')
+    assert(/\.bottombar-actions \{[^}]*justify-content: space-evenly/.test(css), '底栏图标没有沿底栏长度均分')
+    assert(!/\.bottombar-actions \{[^}]*justify-content: center/.test(css), '底栏图标又缩回中间一簇了')
+    assert(botbar.includes('class="bottombar-actions"'), '底栏按钮组丢了')
+    assert(css.includes('.bottombar-actions'), '缺少底栏按钮组样式')
+    // 底栏：固定在视口底部、始终可见，不再是一条吸在页面上方的横条
+    const barRule = css.slice(css.indexOf('.bottombar {'), css.indexOf('.bottombar::after'))
+    assert(barRule.includes('position: fixed'), '底栏没有固定在视口上')
+    assert(/bottom: 0/.test(barRule), '底栏没有贴住视口底部')
+    // 别写成 /top: / —— 「border-top:」里也含这个片段，会假红
+    assert(!/(?<![-\w])top:/.test(barRule), '底栏还挂在页面上方')
+    assert(!barRule.includes('position: sticky'), '底栏还留着旧的吸顶定位')
+    assert(barRule.includes('border-top: 1px solid var(--border)'), '底栏缺少顶边分隔线')
+    assert(!barRule.includes('border-bottom'), '底栏还留着旧的底边线')
+    assert(barRule.includes('env(safe-area-inset-bottom'), '底栏没给 iPhone 底部安全区留空间')
+    // 内容底部要给固定底栏让位，否则最后一张卡会被压住
+    assert(/\.content \{[^}]*padding:[^;]*env\(safe-area-inset-bottom/.test(css), '内容底部没给底栏让位')
+    assert(css.includes('--bottombar-h'), '缺少底栏高度 token')
+    // 底栏高度：2026-09-21 用户要求「太高了，降到原来的 1/3」（62px → 21px，窄屏 58 → 19）。
+    // 条变薄后控件必须跟着缩，所以按钮盒子 / 图标一律从 --bottombar-h 派生 —— 这几条是
+    // 反向断言：不许再写死 38px / 34px，否则薄条会被大按钮撑破。
+    assert(/--bottombar-h: 21px/.test(css), '底栏高度没降到原来的 1/3')
+    assert(/--bottombar-h: 19px/.test(css), '窄屏底栏高度没同步降到 1/3')
+    assert(/--bottombar-ctrl:\s*calc\(var\(--bottombar-h\)/.test(css), '底栏按钮盒子没跟着高度派生')
+    assert(/--bottombar-ico:\s*calc\(var\(--bottombar-h\)/.test(css), '底栏图标尺寸没跟着高度派生')
+    assert(/\.fav-btn, \.unread-btn \{[^}]*width: var\(--bottombar-ctrl\)/.test(css), '底栏图标按钮还在写死尺寸')
+    assert(/\.bottombar-actions \.btn \{[^}]*height: var\(--bottombar-ctrl\)/.test(css), '底栏文字按钮没跟着收窄')
+    assert(!/\.fav-btn, \.unread-btn \{[^}]*38px/.test(css), '底栏按钮又长回 38px 了')
+    assert(!/\.fav-btn, \.unread-btn \{ width: 34px/.test(css), '窄屏又写死了 34px 的底栏按钮')
+    assert(!css.includes('topbar'), '样式里还留着顶栏的旧命名')
+    assert(!html.includes('topbar'), 'HTML 里还留着顶栏的旧命名')
   })
 
-  await check('顶栏不显示条数（只留读屏播报）', async () => {
-    // 用户 2026-09-19 要求取消顶栏那个数字；条数只播报给读屏，视觉上不出现
+  await check('底栏不显示条数（只留读屏播报）', async () => {
+    // 用户 2026-09-19 要求取消底栏那个数字；条数只播报给读屏，视觉上不出现
     const html = await (await fetch(`${BASE}/`)).text()
-    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
-    assert(topbar.includes('id="stat-text"'), '条数播报节点丢了（读屏会听不到列表条数）')
-    assert(!/class="stat"/.test(topbar), '顶栏又出现了可见的统计数字')
-    assert(!html.includes('topbar-status'), '顶栏又挂回了统计容器')
+    const botbar = barOf(html)
+    assert(botbar.includes('id="stat-text"'), '条数播报节点丢了（读屏会听不到列表条数）')
+    assert(!/class="stat"/.test(botbar), '底栏又出现了可见的统计数字')
+    assert(!html.includes('topbar-status'), '底栏又挂回了统计容器')
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    assert(!/^\.stat \{/m.test(css), '样式里仍留着顶栏统计数字的样式')
-    assert(!css.includes('.topbar-status'), '样式里仍留着顶栏统计容器')
+    assert(!/^\.stat \{/m.test(css), '样式里仍留着底栏统计数字的样式')
+    assert(!css.includes('.topbar-status'), '样式里仍留着底栏统计容器')
     const js = await (await fetch(`${BASE}/app.js`)).text()
     assert(js.includes('renderStat'), '缺少条数播报逻辑')
-    assert(!/<span aria-hidden="true">\$\{shown\}<\/span>/.test(js), '顶栏统计又渲染回了可见数字')
+    assert(!/<span aria-hidden="true">\$\{shown\}<\/span>/.test(js), '底栏统计又渲染回了可见数字')
   })
 
-  await check('顶栏未读过滤', async () => {
-    // 2026-09-21 用户要求：顶栏加一个「只看未读」，跟收藏开关同一套语言
+  await check('底栏未读过滤', async () => {
+    // 2026-09-21 用户要求：底栏加一个「只看未读」，跟收藏开关同一套语言
     const html = await (await fetch(`${BASE}/`)).text()
     const js = await (await fetch(`${BASE}/app.js`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    const topbar = html.slice(html.indexOf('<header class="topbar"'), html.indexOf('</header>'))
-    assert(topbar.includes('id="btn-unread"'), '顶栏缺少未读过滤开关')
-    assert(/id="btn-unread"[^>]*aria-pressed/.test(topbar), '未读开关缺少 aria-pressed 状态')
-    assert(topbar.indexOf('id="btn-unread"') < topbar.indexOf('id="btn-fav"'), '未读开关没排在收藏开关前面')
-    assert(topbar.indexOf('id="btn-fav"') < topbar.indexOf('id="btn-api"'), '两个开关没放在「接口」左边')
+    const botbar = barOf(html)
+    assert(botbar.includes('id="btn-unread"'), '底栏缺少未读过滤开关')
+    assert(/id="btn-unread"[^>]*aria-pressed/.test(botbar), '未读开关缺少 aria-pressed 状态')
+    assert(botbar.indexOf('id="btn-unread"') < botbar.indexOf('id="btn-fav"'), '未读开关没排在收藏开关前面')
+    assert(botbar.indexOf('id="btn-fav"') < botbar.indexOf('id="btn-api"'), '两个开关没放在「接口」左边')
     // 只留图标，不许有文字
-    const btn = topbar.slice(topbar.indexOf('id="btn-unread"'))
+    const btn = botbar.slice(botbar.indexOf('id="btn-unread"'))
     assert(!btn.slice(0, btn.indexOf('</button>')).includes('<span'), '未读开关里带着文字')
     assert(js.includes('syncUnreadBtn'), '缺少未读开关的状态同步')
     assert(/view\.unread/.test(js), '缺少未读筛选状态')
@@ -285,14 +325,14 @@ async function main() {
     assert(/\.del-btn::after/.test(css), '删除按钮没有撑出触摸热区')
   })
 
-  await check('界面保持精简（顶栏 / 卡片）', async () => {
+  await check('界面保持精简（底栏 / 卡片）', async () => {
     // 用户 2026-09-19 定的调子：能省的装饰都省掉，只留内容和操作
     const html = await (await fetch(`${BASE}/`)).text()
     const js = await (await fetch(`${BASE}/app.js`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
 
-    // ① 顶栏不挂「公开可看」徽标
-    assert(!html.includes('pub-badge'), '顶栏又出现了「公开可看」徽标')
+    // ① 底栏不挂「公开可看」徽标
+    assert(!html.includes('pub-badge'), '底栏又出现了「公开可看」徽标')
     assert(!css.includes('.pub-badge'), '样式里仍留着「公开可看」徽标')
 
     // ② 卡片边框一律一样，不按内容类型上色
@@ -395,13 +435,13 @@ async function main() {
   })
 
   await check('留言功能已移除', async () => {
-    // 2026-09-21 用户要求：留言板整体下线（顶栏入口、弹窗、逻辑、样式都不再出现）
+    // 2026-09-21 用户要求：留言板整体下线（底栏入口、弹窗、逻辑、样式都不再出现）
     const html = await (await fetch(`${BASE}/`)).text()
     const js = await (await fetch(`${BASE}/app.js`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
     assert(!html.includes('msg-modal'), '留言弹窗又回来了')
-    assert(!html.includes('btn-msg'), '顶栏又出现留言入口')
-    assert(!html.includes('msg-badge'), '顶栏又出现留言角标')
+    assert(!html.includes('btn-msg'), '底栏又出现留言入口')
+    assert(!html.includes('msg-badge'), '底栏又出现留言角标')
     assert(!js.includes('openMsgBoard'), '留言板逻辑没删干净')
     assert(!js.includes("from('messages')"), 'app.js 仍在读写留言表')
     assert(!/\.msg-/.test(css), '样式里仍留着留言相关规则')

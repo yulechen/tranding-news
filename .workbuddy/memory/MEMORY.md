@@ -34,16 +34,32 @@
   🚫 别改用 `documents`，那会往真实内容库写测试数据
 
 ## 前端口径（用户逐条定过，别自作主张回退）
-### 顶栏
-- **整条只剩一排按钮、水平居中**：`#btn-unread` 未读 · `#btn-fav` 收藏 · `#btn-api` 接口 ·
-  `#btn-refresh` 刷新；都只有图标、共用 `.fav-btn, .unread-btn` 骨架（未读蓝 / 收藏琥珀）
-- 🚫 **顶栏不再有品牌**（2026-09-21 用户要求取消站标）：云朵图标 + 「云端信息库」站名、
-  `.brand / .brand-mark / .brand-name` 全删（含 ≤900 / ≤680 两条断点规则）。居中靠
-  `.topbar { justify-content: center }`，`.topbar-actions` 不再 `margin-left: auto`；
-  自检「顶栏无品牌标识、图标整体居中」反向守着（启动动画 `.boot-mark` 没动）
+### 底栏（原顶栏，2026-09-21 用户要求整条挪到页面底部）
+- **固定在视口底部**：`position: fixed; left/right: 0; bottom: 0; z-index: 40`；整条只剩一排按钮：
+  `#btn-unread` 未读 · `#btn-fav` 收藏 · `#btn-api` 接口 · `#btn-refresh` 刷新；
+  都只有图标（接口/刷新带文字，≤680 隐掉）、共用 `.fav-btn, .unread-btn` 骨架（未读蓝 / 收藏琥珀）
+- **图标沿整条长度均分**（2026-09-21 用户：「图标平均分布底栏长度」，此前是缩成一簇居中）：
+  `.bottombar-actions { flex: 1; min-width: 0; justify-content: space-evenly; gap: 0 }`。
+  底栏里唯一的在流子元素就是这组按钮（`#stat-text` 是 absolute），所以整组 flex:1 = 铺满整条；
+  🚫 别加回 `justify-content: center` 或 `margin-left: auto`（自检反向守着）
+- **高度 = 21px（≤680 → 19px）**，2026-09-21 用户要求「太高了，降到原来的 1/3」（原 62 / 58px）。
+  条变薄后控件尺寸**全部由高度派生**，改高度只动 `--bottombar-h` 一处：
+  `--bottombar-ctrl: calc(var(--bottombar-h) - 2px)`（按钮盒子）、
+  `--bottombar-ico: calc(var(--bottombar-h) - 8px)`（图标 13 / 11px）。
+  🚫 别再写死 38px / 34px —— 薄条会被大按钮撑破（自检反向守着）
+- 命名一律 `bottombar`（类名 + token `--bottombar-h`）。🚫 别再写回 `topbar`：
+  标签里不放注释、自检里 `!css.includes('topbar')` / `!html.includes('topbar')` 反向守着
+- 结构：`<div class="bottombar">` 放在 **`main` 之后**（Tab 顺序 = 视觉顺序）；用 `min-height` 而非 `height`，
+  配 `padding-bottom: env(safe-area-inset-bottom)` 吃 iPhone 安全区；分隔线在**顶边** `border-top`；
+  那道从左淡出的蓝渐变是 `.bottombar::after { top: -1px }`（原来在底边，用户没要求删）
+- 🚫 **没有品牌**（2026-09-21 取消站标）：云朵图标 + 「云端信息库」站名、`.brand / .brand-mark / .brand-name`
+  全删（含 ≤900 / ≤680 两条断点规则）（启动动画 `.boot-mark` 没动）
 - 🚫 不显示条数（`#stat-text` 套 `.visually-hidden`，只给读屏播报；它是 absolute，不参与居中）
-- ≤680 只留图标（`.topbar-actions .btn span { display: none }`）
-- 顶栏底边那道从左淡出的蓝渐变（`.topbar::after`）**还在**，用户没要求删
+- ≤680 只留图标（`.bottombar-actions .btn span { display: none }`）；热区靠伪元素撑
+  `inset: -6px -12px`（视觉 19px → 热区 31×43px）—— 图标隔得远，横向放宽不会互相压住
+- ⚠️ 固定底栏的两个连带项，改底栏高度时必须一起动：`.content` 底部 padding =
+  `calc(var(--bottombar-h) + var(--sp-5) + env(safe-area-inset-bottom))`（否则最后一张卡被压住）；
+  `.toast` 的 bottom 也要抬到 `calc(var(--bottombar-h) + var(--sp-4) + env(...))`（否则 toast 被盖住）
 
 ### 卡片 / 筛选 / 已读
 - 只有「推送时间 + 标题」+ 两个图标 `data-star` / `data-del`；🚫 眼睛（页内预览）与标签两个按钮都被要求删掉；
@@ -54,7 +70,7 @@
   别的标签页读过后靠 `storage` 事件同步
 - 打开方式：**点卡片 → 当前页预览浮层**；**Shift + 点击 / Shift + 回车 → 新窗口**
   （`window.open` 必须**同步**发 —— 先开占位窗再 `location.replace`，先 `await` 会被拦截；Enter 一律 `preventDefault`）
-- 预览页**没有顶栏**，iframe 铺满整屏，退出只认「×」+ Esc（打开时焦点落在它上面）
+- 预览页**没有任何横条**（顶栏底栏都没有），iframe 铺满整屏，退出只认「×」+ Esc（打开时焦点落在它上面）
   - **关闭钮：底部正中 + 裸「×」**（2026-09-21 用户连改两轮：右上角 → 顶部正中 → 底部正中，再去掉圆形底盘）
     `position:absolute; bottom:var(--sp-3); left:50%; margin-left:-19px`；`border:0` + `background:none` +
     无 `border-radius` / `box-shadow`；图标 22px（≤680 收到 20px、盒子 34px）

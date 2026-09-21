@@ -74,7 +74,12 @@
   /* ── 焦点环 ── */
   --focus-ring: 0 0 0 3px rgba(37, 99, 235, .26);
 
-  --topbar-h: 62px;
+  /* 底栏高度（2026-09-21 由顶栏改为底栏，随后按用户要求降到原来的 1/3：
+     62px → 21px）。条变薄后，里面的控件盒子与图标都从这一条 token 派生 ——
+     下次再调高度只动这里，不会出现「条已经很薄、按钮还是 38px 把条撑破」的错位。 */
+  --bottombar-h: 21px;
+  --bottombar-ctrl: calc(var(--bottombar-h) - 2px);
+  --bottombar-ico:  calc(var(--bottombar-h) - 8px);
   --content-max: 1240px;
 }
 
@@ -124,7 +129,7 @@ button { cursor: pointer; }
   border: 0;
 }
 
-/* 跳转到主要内容：整页第一个可聚焦元素，键盘用户按一下就能跳过顶栏 */
+/* 跳转到主要内容：整页第一个可聚焦元素，键盘用户按一下就能直接落到内容上 */
 .skip-link {
   position: fixed;
   top: var(--sp-2);
@@ -301,42 +306,63 @@ button { cursor: pointer; }
 
 .main-view { min-height: 100%; }
 
-.topbar {
-  position: sticky; top: 0;
+/* 底栏（2026-09-21 用户要求：原顶栏整体下移成底栏）。
+   固定在视口底部、始终可见，不跟着内容滚；用 min-height 而不是 height，
+   好让 iPhone 的 home indicator 安全区通过 padding-bottom 叠上去（全局 border-box）。
+   里面只有一排图标按钮，没有任何品牌标识。 */
+.bottombar {
+  position: fixed; left: 0; right: 0; bottom: 0;
   z-index: 40;
-  height: var(--topbar-h);
+  min-height: var(--bottombar-h);
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--sp-4);
-  padding: 0 var(--sp-6);
+  padding: 0 var(--sp-6) env(safe-area-inset-bottom, 0px);
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
 }
-/* 顶栏底边压一道品牌渐变，只占左边一段 —— 做识别点，又不抢内容 */
-.topbar::after {
+/* 底栏顶边压一道品牌渐变，只占左边一段 —— 做识别点，又不抢内容 */
+.bottombar::after {
   content: "";
   position: absolute;
-  left: 0; right: 0; bottom: -1px;
+  left: 0; right: 0; top: -1px;
   height: 2px;
   background: linear-gradient(90deg, var(--accent), #38bdf8 24%, rgba(56, 189, 248, 0) 60%);
   opacity: .55;
   pointer-events: none;
 }
 
-/* 顶栏只有这一组按钮（2026-09-21 去掉品牌标识后），整组水平居中 */
-.topbar-actions {
+/* 底栏只有这一组按钮（2026-09-21 去掉品牌标识后）。
+   2026-09-21 用户要求「图标平均分布底栏长度」：整组不再缩成一簇居中，而是
+   flex:1 撑满底栏可用宽度，四个图标用 space-evenly 沿长度均分 —— 连两端的留白
+   也一起均分，长成一条真正的底部标签栏。 */
+.bottombar-actions {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
+  justify-content: space-evenly;
+  gap: 0;
   position: relative;
 }
+/* 底栏里的文字按钮（接口 / 刷新）跟着条一起收：高度取 --bottombar-ctrl、图标取
+   --bottombar-ico，字号降到 --fs-xs 并压平行高，否则 14px 的字在 19px 盒子里会顶边。
+   热区用伪元素往上下撑开，视觉上仍然是薄薄一条。 */
+.bottombar-actions .btn {
+  position: relative;
+  height: var(--bottombar-ctrl);
+  padding: 0 var(--sp-2);
+  gap: 3px;
+  font-size: var(--fs-xs);
+  line-height: 1;
+}
+.bottombar-actions .btn svg { width: var(--bottombar-ico); height: var(--bottombar-ico); }
+.bottombar-actions .btn::after { content: ""; position: absolute; inset: -6px -12px; }
 
 /* 顶栏的两个视角开关（未读 / 收藏）：只有图标、跟着右侧按钮组走、尺寸对齐 .btn 的高度。
    骨架完全一样，只有「点亮之后的颜色」不同 —— 未读用蓝、收藏用琥珀 */
 .fav-btn, .unread-btn {
   position: relative;
-  width: 38px; height: 38px;
+  width: var(--bottombar-ctrl); height: var(--bottombar-ctrl);
   flex: none;
   display: grid; place-items: center;
   border: 1px solid transparent;
@@ -346,9 +372,10 @@ button { cursor: pointer; }
   transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
               border-color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
 }
-/* 视觉 38px，热区撑到 44px */
-.fav-btn::after, .unread-btn::after { content: ""; position: absolute; inset: -3px; }
-.fav-btn svg, .unread-btn svg { width: 18px; height: 18px; }
+/* 视觉只有 19px 见方（条薄了），热区靠伪元素往上下撑到 31px、往左右撑到 43px；
+   图标现在沿底栏均分、彼此隔得很远，放宽也不会互相压住 */
+.fav-btn::after, .unread-btn::after { content: ""; position: absolute; inset: -6px -12px; }
+.fav-btn svg, .unread-btn svg { width: var(--bottombar-ico); height: var(--bottombar-ico); }
 
 .fav-btn:hover { background: var(--star-soft); color: var(--star); transform: scale(1.06); }
 .fav-btn.is-active {
@@ -368,7 +395,8 @@ button { cursor: pointer; }
 .content {
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: var(--sp-6) var(--sp-6) 90px;
+  /* 底部给固定底栏让位：底栏高 + 一点间距 + iPhone 底部安全区，别让最后一张卡被压住 */
+  padding: var(--sp-6) var(--sp-6) calc(var(--bottombar-h) + var(--sp-5) + env(safe-area-inset-bottom, 0px));
 }
 
 /* ── 收件箱提示 ─────────────────────────────────────────── */
@@ -909,7 +937,8 @@ button { cursor: pointer; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(30px + env(safe-area-inset-bottom, 0px));
+  /* 底栏是固定的，toast 得浮到它上面去，不然会被压住 */
+  bottom: calc(var(--bottombar-h) + var(--sp-4) + env(safe-area-inset-bottom, 0px));
   z-index: 95;
   transform: translate(-50%, 22px);
   padding: var(--sp-3) var(--sp-5);
@@ -931,17 +960,14 @@ button { cursor: pointer; }
 /* ═══════════ 响应式 ═══════════ */
 
 @media (max-width: 680px) {
-  :root { --topbar-h: 58px; }
+  :root { --bottombar-h: 19px; }
 
-  .topbar { gap: var(--sp-2); padding: 0 var(--sp-3); }
-  .topbar-actions { gap: 2px; }
-  .topbar-actions .btn { padding: 0 9px; }
-  .topbar-actions .btn span { display: none; }
+  .bottombar { padding: 0 var(--sp-3) env(safe-area-inset-bottom, 0px); }
+  .bottombar-actions .btn { padding: 0 var(--sp-1); }
+  .bottombar-actions .btn span { display: none; }
 
-  .content { padding: var(--sp-4) var(--sp-3) calc(72px + env(safe-area-inset-bottom, 0px)); }
-
-  /* 顶栏更挤：两个视角开关收一档，别把按钮挤出去 */
-  .fav-btn, .unread-btn { width: 34px; height: 34px; }
+  .content { padding: var(--sp-4) var(--sp-3) calc(var(--bottombar-h) + var(--sp-4) + env(safe-area-inset-bottom, 0px)); }
+  /* 底栏两个视角开关不用再单独收尺寸：宽高由 --bottombar-h 派生，跟着 token 走 */
 
   /* 类型分段控件横滑，不换行、不被压缩；右边要给分类入口留出位置 */
   .toolbar { gap: 10px; }

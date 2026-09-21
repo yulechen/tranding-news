@@ -28,32 +28,6 @@
 <!-- ══════════ 主界面 ══════════ -->
 <div id="main-view" class="main-view is-hidden">
 
-  <header class="topbar">
-    <!-- 2026-09-21 用户要求：顶栏不再有网站标识（云朵图标 + 站名），也不再有右侧按钮组这种说法，
-         整条只剩一排按钮、水平居中 -->
-
-    <!-- 条数不再显示，只播报给读屏：视觉上没有这个数字 -->
-    <span class="visually-hidden" id="stat-text" role="status" aria-live="polite"></span>
-
-    <div class="topbar-actions">
-      <!-- 两个视角开关：只有图标。未读在前、收藏在后，都排在「接口」左边 -->
-      <button type="button" class="unread-btn" id="btn-unread" title="只看未读" aria-label="只看未读" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.7" fill="currentColor"/></svg>
-      </button>
-      <button type="button" class="fav-btn" id="btn-fav" title="只看收藏" aria-label="只看收藏" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.85z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-      </button>
-      <button type="button" class="btn btn-ghost" id="btn-api" title="推送数据开放接口" aria-label="推送数据开放接口说明">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8.5L5 12l4 3.5M15 8.5L19 12l-4 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>接口</span>
-      </button>
-      <button type="button" class="btn btn-ghost" id="btn-refresh" title="重新载入" aria-label="重新载入内容">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11a8.5 8.5 0 10-2.5 6.4M20.5 5v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>刷新</span>
-      </button>
-    </div>
-  </header>
-
   <main class="content" id="main-content" tabindex="-1">
 
     <section class="inbox-bar is-hidden" id="inbox-bar" aria-live="polite">
@@ -89,6 +63,32 @@
     </section>
 
   </main>
+
+  <!-- 底栏（2026-09-21 用户要求：原顶栏整体下移成底栏）。
+       固定在视口底部、始终可见；里面只有一排图标按钮、水平居中，没有任何品牌标识。
+       刻意放在 main 之后，让 Tab 顺序跟视觉顺序一致（内容在前、底栏在后）。 -->
+  <div class="bottombar">
+    <!-- 条数不再显示，只播报给读屏：视觉上没有这个数字 -->
+    <span class="visually-hidden" id="stat-text" role="status" aria-live="polite"></span>
+
+    <div class="bottombar-actions">
+      <!-- 两个视角开关：只有图标。未读在前、收藏在后，都排在「接口」左边 -->
+      <button type="button" class="unread-btn" id="btn-unread" title="只看未读" aria-label="只看未读" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.7" fill="currentColor"/></svg>
+      </button>
+      <button type="button" class="fav-btn" id="btn-fav" title="只看收藏" aria-label="只看收藏" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.85z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="btn btn-ghost" id="btn-api" title="推送数据开放接口" aria-label="推送数据开放接口说明">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8.5L5 12l4 3.5M15 8.5L19 12l-4 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>接口</span>
+      </button>
+      <button type="button" class="btn btn-ghost" id="btn-refresh" title="重新载入" aria-label="重新载入内容">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11a8.5 8.5 0 10-2.5 6.4M20.5 5v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>刷新</span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ 预览 ══════════ -->

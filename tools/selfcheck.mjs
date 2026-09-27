@@ -190,12 +190,15 @@ async function main() {
     assert(!/<span aria-hidden="true">\$\{shown\}<\/span>/.test(js), '统计又渲染回了可见数字')
   })
 
-  await check('已读状态：打开即已读，已读卡片变灰', async () => {
+  await check('已读状态：云端保存，本地缓存兜底，已读卡片变灰', async () => {
     const js = await (await fetch(`${BASE}/app.js`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
-    // 只记在本机（站点公开、无登录，区分不了「谁读的」）
-    assert(/READ_KEY = 'iv_read'/.test(js), '缺少已读状态的本地存储键')
-    assert(js.includes('localStorage.setItem(READ_KEY'), '已读状态没有落到本机')
+    assert(/LIST_FIELDS = '[^']*tags/.test(js), '列表没有读取云端 tags')
+    assert(js.includes("const READ_TAG = '__iv_read__'"), '缺少云端已读保留标记')
+    assert(js.includes('.update({ tags })'), '打开内容没有更新云端已读标记')
+    assert(js.includes('syncReadFromCloud'), '缺少云端已读状态同步')
+    assert(/READ_KEY = 'iv_read'/.test(js), '缺少已读状态的本地缓存键')
+    assert(js.includes('localStorage.setItem(READ_KEY'), '已读状态没有落到本地缓存')
     assert(js.includes('function markRead'), '缺少标记已读的实现')
     assert(/const isRead = \(id\) =>/.test(js), '缺少已读判断')
     // 卡片要带上已读标记
@@ -205,7 +208,7 @@ async function main() {
     assert(/markRead\(id\)/.test(docPage.slice(0, 1500)), '详情页打开时没标记已读')
     const newWin = js.slice(js.indexOf('function openInNewWindow'))
     assert(/markRead\(doc\.id\)/.test(newWin.slice(0, 400)), '新窗口打开时没标记已读')
-    assert(/if \(link\) markRead\(link\.dataset\.open\)/.test(js), '点卡片链接时没标记已读')
+    assert(/if \(link\) void markRead\(link\.dataset\.open\)/.test(js), '点卡片链接时没标记已读')
     // 已读只压视觉，不能把卡片藏起来或者禁用掉
     assert(css.includes('.card.is-read'), '缺少已读卡片的样式')
     assert(/\.card\.is-read \.card-title \{ color: var\(--ink-3\)/.test(css), '已读卡片标题没压灰（或用了对比度不够的色阶）')
@@ -220,15 +223,15 @@ async function main() {
   })
 
 
-  await check('分类只有 报告 / 自选 / 计划，可逐条编辑', async () => {
-    // 2026-09-20 用户定的：分类收敛成三类，并在列表上方给一个逐条改分类的入口
+  await check('分类包含五类，可逐条编辑', async () => {
+    // 分类在列表上方提供逐条修改入口
     const html = await (await fetch(`${BASE}/`)).text()
     const js = await (await fetch(`${BASE}/app.js`)).text()
     const css = await (await fetch(`${BASE}/styles.css`)).text()
 
-    // ① 分类就三类，旧的那套（看板 / 工具 / 页面 / 其他）不能再露头
+    // ① 分类包含五类，旧的那套（看板 / 工具 / 页面 / 其他）不能再露头
     const types = js.slice(js.indexOf('const TYPES = ['), js.indexOf('const TYPE_LABEL'))
-    assert(/'report'/.test(types) && /'watchlist'/.test(types) && /'plan'/.test(types), '三类分类没齐（报告 / 自选 / 计划）')
+    assert(/'report'/.test(types) && /'watchlist'/.test(types) && /'plan'/.test(types) && /'holdings'/.test(types) && /'deep'/.test(types), '五类分类没齐')
     assert(!/'dashboard'|'tool'|'page'|'other'/.test(types), '旧分类（看板 / 工具 / 页面 / 其他）还在')
     assert(js.includes("const DEFAULT_TYPE = 'report'"), '缺省分类不是「报告」')
 
@@ -243,10 +246,10 @@ async function main() {
     assert(js.includes('function renderCatList') && js.includes('function setDocType'), '缺少分类编辑的实现')
     assert(/update\(\{ doc_type: type/.test(js), '改了分类却没写回 doc_type')
 
-    // ④ 「编辑信息」弹窗里的下拉也得只剩三项
+    // ④ 「编辑信息」弹窗里的下拉也得包含五项
     const selStart = html.indexOf('id="edit-type"')
     const sel = html.slice(selStart, html.indexOf('</select>', selStart))
-    assert(sel.includes('value="watchlist"') && sel.includes('value="plan"'), '编辑信息弹窗里的分类没更新')
+    assert(sel.includes('value="watchlist"') && sel.includes('value="plan"') && sel.includes('value="holdings"') && sel.includes('value="deep"'), '编辑信息弹窗里的分类没更新')
     assert(!/value="(dashboard|tool|page|other)"/.test(sel), '编辑信息弹窗里还留着旧分类')
 
     assert(css.includes('.cat-btn'), '缺少分类编辑入口的样式')

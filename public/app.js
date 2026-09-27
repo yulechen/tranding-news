@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    云端信息库 · 前端逻辑
    无需登录，打开即看；内容正文直接存在云数据库里。
-   内容的组织靠分类（报告 / 自选 / 计划），逐条在页面里调。
+   内容的组织靠分类（报告 / 自选 / 计划 / 持仓 / 深度），逐条在页面里调。
    顶栏另有「接口」（推送数据的开放接口说明）。
    ═══════════════════════════════════════════════════════════ */
 
@@ -12,28 +12,29 @@
   const INGEST_KEY = 'iv_ing_7f3a9c2e5b8d4160a1f6e9c4b7d20385'
   const MAX_CONTENT = 2 * 1024 * 1024       // 单个内容上限 2MB
 
-  const LIST_FIELDS = 'id,title,summary,doc_type,source,file_size,starred,created_at'
+  const LIST_FIELDS = 'id,title,summary,doc_type,source,file_size,starred,tags,created_at'
 
   /* 云数据库的裸 REST 端点（不涉及登录，用应用标识鉴权）。
      接口说明弹窗里的示例全部由它拼出来，避免文档和实际接口写岔。 */
   const REST_BASE = String(CFG.endpoint || '').replace(/\/+$/, '') + '/.cloud/database/rest'
   const API_URL = `${REST_BASE}/documents`
 
-  /* 已读状态：站点公开、没有登录，所以「谁读的」无从区分，只记在本机浏览器里。
-     存的是一组内容 id —— 读过就变灰；新推的内容 id 不在集合里，天然是未读。
-     筛选条上的「只看未读」就是拿这个集合反着筛。
-     （不再显示条数，已读/未读全靠卡片底色区分。） */
+  /* 已读状态：云端 documents.tags 里的内部标记是权威来源；localStorage 只做离线兜底。
+     站点当前没有登录体系，因此云端状态对所有访问者共享。 */
   const READ_KEY = 'iv_read'
+  const READ_TAG = '__iv_read__'
 
   const TYPES = [
     { key: 'all', label: '全部' },
     { key: 'report', label: '报告' },
     { key: 'watchlist', label: '自选' },
-    { key: 'plan', label: '计划' }
+    { key: 'plan', label: '计划' },
+    { key: 'holdings', label: '持仓' },
+    { key: 'deep', label: '深度' }
   ]
   const TYPE_LABEL = TYPES.reduce((m, t) => (m[t.key] = t.label, m), {})
   const TYPE_KEYS = TYPES.map((t) => t.key).filter((k) => k !== 'all')
-  // 推送没带类型、或旧数据落在三类之外时归到这里（原来那套 dashboard/tool/page/other 已停用）
+  // 推送没带类型、或旧数据落在五类之外时归到这里（原来那套 dashboard/tool/page/other 已停用）
   const DEFAULT_TYPE = 'report'
   const typeOf = (d) => (TYPE_KEYS.includes(d.doc_type) ? d.doc_type : DEFAULT_TYPE)
 
@@ -109,7 +110,7 @@
   let currentHtml = ''
   let loading = false
   let firstPaint = true       // 卡片入场动画只在首屏播一次，切筛选不重播
-  let readIds = new Set()     // 已读的内容 id（本机 localStorage）
+  let readIds = new Set()     // 已读的内容 id（云端为主，本地为兜底）
 
   // 三个筛选条件互相叠加：分类 / 只看收藏 / 只看未读
   const view = { type: 'all', unread: false }
@@ -333,6 +334,7 @@
       if (error) throw error
       docs = Array.isArray(data) ? data : []
       loadRead()
+      await syncReadFromCloud()
       pruneRead()
       renderFilters()
       renderDocs()
@@ -376,7 +378,7 @@
     })
 
     // 分类筛选收进一个分段控件：比一排散落的胶囊安静，选中态也更明确。
-    // 分类固定就三类，0 条也照样列出来 —— 藏掉的话「自选 / 计划」会看起来不存在
+    // 分类固定就五类，0 条也照样列出来 —— 藏掉的话分类会看起来不存在
     const segs = TYPES.map((t) => {
       const n = counts[t.key] || 0
       return `<button type="button" class="seg${view.type === t.key ? ' is-active' : ''}" data-type="${t.key}" aria-pressed="${view.type === t.key}">${t.label}<span class="seg-n">${n}</span></button>`
@@ -431,6 +433,20 @@
     try { localStorage.setItem(READ_KEY, JSON.stringify([...readIds])) } catch (_) { /* 隐私模式忽略 */ }
   }
 
+  /** 列表成功返回后以云端读状态为准；localStorage 仅用于更新失败时的短暂兜底。 */
+  async function syncReadFromCloud() {
+    if (!docs.length) {
+      readIds = new Set()
+      saveRead()
+      return
+    }
+    const cloudIds = new Set(docs
+      .filter((d) => Array.isArray(d.tags) && d.tags.includes(READ_TAG))
+      .map((d) => String(d.id)))
+    readIds = cloudIds
+    saveRead()
+  }
+
   const isRead = (id) => loadRead().has(String(id))
 
   function findCard(id) {
@@ -440,16 +456,33 @@
   }
 
   /** 打开内容就标记已读。只给这一张卡片加 class，不整屏重渲染（免得入场动画重播） */
-  function markRead(id) {
+  async function markRead(id) {
     if (id === undefined || id === null) return
     loadRead()
-    if (readIds.has(String(id))) return
+    const knownDoc = docs.find((item) => String(item.id) === String(id))
+    if (readIds.has(String(id)) && Array.isArray(knownDoc?.tags) && knownDoc.tags.includes(READ_TAG)) return
     readIds.add(String(id))
     saveRead()
     const card = findCard(id)
     if (card) card.classList.add('is-read')
     // 未读计数跟着掉一个（顶栏那个开关的提示语要用）
     syncUnreadBtn(docs.filter((d) => !isRead(d.id)).length)
+
+    try {
+      const tags = Array.isArray(knownDoc?.tags) ? knownDoc.tags.slice() : []
+      if (!tags.includes(READ_TAG)) tags.push(READ_TAG)
+      const res = await cloud.database.from('documents')
+        .update({ tags })
+        .eq('id', id)
+        .select('id,tags')
+      if (res.error) throw res.error
+      if (!Array.isArray(res.data) || !res.data.length) throw new Error('云端已读状态未保存')
+      const doc = docs.find((item) => String(item.id) === String(id))
+      if (doc) doc.tags = tags
+    } catch (err) {
+      // 本地状态保留，下一次联网加载会以云端状态为准。
+      console.warn('云端已读状态保存失败', err)
+    }
   }
 
   /** 列表刷新后顺手清掉已经不存在的 id，别让本地记录一直膨胀 */
@@ -579,7 +612,8 @@
       currentHtml = String(doc.content || '')
       html = currentHtml || previewShell('这条内容是空的')
       document.title = (doc.title ? doc.title + ' · ' : '') + '云端信息库'
-      markRead(id)
+      // 已读状态后台同步，不阻塞正文首屏渲染。
+      void markRead(id)
     } catch (err) {
       html = previewShell(`<b>内容载入失败</b>${escapeHtml(friendly(err))}`)
     }
@@ -637,7 +671,7 @@
    */
   function openInNewWindow(doc) {
     if (!doc) return
-    markRead(doc.id)
+    void markRead(doc.id)
     const win = window.open(docUrl(doc.id), '_blank')
     if (!win) toast('新窗口被浏览器拦住了，允许本站弹出窗口后再试', 'err')
   }
@@ -882,7 +916,7 @@
   }
 
   /* ═══════════════ 分类编辑 ═══════════════
-     工具栏右侧的图标打开，逐条把内容归到 报告 / 自选 / 计划。
+     工具栏右侧的图标打开，逐条把内容归到 报告 / 自选 / 计划 / 持仓 / 深度。
      推送来的内容默认都是「报告」，要挪到「自选」「计划」就在这里点一下。 */
 
   function openCatEditor() {
@@ -1001,7 +1035,7 @@
     ['title', '必填', '标题，显示在卡片上'],
     ['content', '必填', 'HTML 源码全文'],
     ['summary', '选填', '一句话摘要，卡片上展示'],
-    ['doc_type', '选填', '分类：report / watchlist / plan，默认 report'],
+    ['doc_type', '选填', '分类：report / watchlist / plan / holdings / deep，默认 report'],
     ['source', '选填', '来源标记，例如自己的脚本名'],
     ['file_size', '选填', '内容字节数']
   ]
@@ -1126,7 +1160,7 @@ GET ${rest}/documents?select=content&id=eq.1</pre>
       // 键盘 Tab + 回车也是原生行为，不再需要额外的 keydown 处理。
       // 这里唯一要做的就是把「已读」记下来（localStorage 是同步写，跳走也来得及）。
       const link = e.target.closest('a.card-link')
-      if (link) markRead(link.dataset.open)
+      if (link) void markRead(link.dataset.open)
     })
 
     // 分类编辑：工具栏右侧的图标打开，点一下就改一条、即改即存

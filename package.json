@@ -5,7 +5,8 @@
   "description": "云端信息库 —— 由 WorkBuddy 生成的 HTML 内容的统一管理与查看",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "start:hidden": "wscript.exe start-hidden.vbs"
   },
   "engines": {
     "node": ">=18"
